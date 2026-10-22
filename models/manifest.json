@@ -1,0 +1,14 @@
+{
+  "model": "YOLOv8n",
+  "task": "detect",
+  "dataset": "COCO (80 lớp)",
+  "source": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8n.pt",
+  "release": "v8.3.0",
+  "file": "yolov8n.pt",
+  "size_bytes": 6549796,
+  "sha256": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
+  "checksum_verification": "measured-after-download",
+  "license": "Ultralytics AGPL-3.0 hoặc Enterprise; xem điều kiện tại nguồn",
+  "license_url": "https://www.ultralytics.com/license",
+  "downloaded_at": "2026-10-22T07:34:17.386604+00:00"
+}
