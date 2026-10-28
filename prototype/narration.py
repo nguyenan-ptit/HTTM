@@ -94,7 +94,8 @@ COCO_LABELS_VI: dict[str, str] = {
     "toothbrush": "bàn chải đánh răng",
 }
 
-UNKNOWN_LABEL_VI = "vật thể chưa có bản dịch"
+UNKNOWN_LABEL_VI = "vật thể không rõ loại"
+NEAR_AREA = 0.2  # Hộp chiếm ≥20% ảnh thì nói "có vẻ gần"; chỉ là gợi ý theo cỡ hộp, không phải khoảng cách đo.
 _VEHICLES = frozenset(
     {"bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat"}
 )
@@ -165,6 +166,7 @@ def narrate(
     # A group holds the best confidence, rather than a count: multiple boxes
     # do not prove how many physical objects exist.
     grouped: dict[tuple[str, str], float] = {}
+    near: set[tuple[str, str]] = set()
     for detection in result.detections:
         if not math.isfinite(detection.score) or not min_confidence <= detection.score <= 1:
             continue
@@ -179,23 +181,41 @@ def narrate(
         )
         key = (_canonical_label(detection.label), position)
         grouped[key] = max(grouped.get(key, 0), detection.score)
+        if (x2 - x1) * (y2 - y1) >= NEAR_AREA * width * height:
+            near.add(key)
 
-    # Stable label/position ordering prevents detector iteration order from
-    # changing the dedup key; best score determines which groups fit the limit.
+    # Mỗi nhãn một lượt chọn: nhiều người ở nhiều vị trí không được chiếm hết chỗ của đồ vật khác.
+    # Vật có vẻ gần được đọc trước, rồi theo ưu tiên và độ tin cậy.
+    labels: dict[str, list[str]] = {}
+    for key in grouped:
+        labels.setdefault(key[0], []).append(key[1])
     ranked = sorted(
-        grouped,
-        key=lambda key: (_priority(key[0]), -grouped[key], key[0], _POSITION_ORDER[key[1]]),
+        labels,
+        key=lambda label: (
+            not any((label, pos) in near for pos in labels[label]), _priority(label),
+            -max(grouped[(label, pos)] for pos in labels[label]), label,
+        ),
     )
+
+    def phrase(label: str, positions: list[str], suffix: str = "") -> str:
+        parts = [_POSITION_TEXT[pos] for pos in sorted(positions, key=_POSITION_ORDER.get)]
+        where = parts[0] if len(parts) == 1 else ", ".join(parts[:-1]) + " và " + parts[-1]
+        return f"Có {label_vi(label)} {where}{suffix}."
+
     selected: list[tuple[str, str]] = []
     sentences: list[str] = []
-    for key in ranked:
-        sentence = f"Có {label_vi(key[0])} {_POSITION_TEXT[key[1]]}."
-        candidate = " ".join([*sentences, sentence])
+    chosen = 0
+    for label in ranked:
+        # Một câu mỗi nhãn cho ngắn; "có vẻ gần" nếu bất kỳ vị trí nào của nhãn đó có hộp lớn.
+        close = any((label, pos) in near for pos in labels[label])
+        new = [phrase(label, labels[label], ", có vẻ gần" if close else "")]
+        candidate = " ".join([*sentences, *new])
         if len(candidate) > max_chars:
             continue
-        selected.append(key)
-        sentences.append(sentence)
-        if len(selected) == max_groups:
+        selected.extend((label, pos) for pos in labels[label])
+        sentences.extend(new)
+        chosen += 1
+        if chosen == max_groups:
             break
     if not selected:
         return None

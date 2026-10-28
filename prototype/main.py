@@ -34,20 +34,31 @@ def probability(value):
     return number
 
 
+def resolve_device(device):
+    if device != "auto":
+        return device
+    import torch
+    return "0" if torch.cuda.is_available() else "cpu"
+
+
 def build_parser():
     parser = argparse.ArgumentParser(description="Camera DroidCam → YOLO → mô tả và giọng tiếng Việt.")
     parser.add_argument("--source", required=True, type=source_value,
                         help="Số nguồn OpenCV thực tế, hoặc tệp/URL video đã kiểm tra")
     parser.add_argument("--no-detect", action="store_true", help="Chỉ xem camera, không nạp model hoặc phát giọng")
     parser.add_argument("--mute", action="store_true", help="Khởi động với âm thanh tắt")
-    parser.add_argument("--model", default="yolov8n.pt", help="Tệp model .pt cục bộ")
-    parser.add_argument("--imgsz", type=int, default=320, help="Kích thước inference, bội số dương của 32")
-    parser.add_argument("--conf", type=probability, default=0.45, help="Ngưỡng confidence")
+    parser.add_argument("--model", default="yolo11s.pt", help="Tệp model .pt cục bộ")
+    parser.add_argument("--imgsz", type=int, default=640, help="Kích thước inference, bội số dương của 32")
+    parser.add_argument("--conf", type=probability, default=0.30,
+                        help="Ngưỡng confidence; tracker lọc báo nhầm một ảnh nên có thể thấp")
     parser.add_argument("--iou", type=probability, default=0.45, help="Ngưỡng IoU cho NMS trong Ultralytics")
-    parser.add_argument("--device", default="cpu", help="Thiết bị Ultralytics; mặc định cpu")
+    parser.add_argument("--device", default="auto", help="Thiết bị Ultralytics; auto = GPU CUDA nếu có, không thì cpu")
+    parser.add_argument("--no-track", action="store_true", help="Tắt theo dõi đối tượng (mất lọc nhấp nháy đa ảnh)")
+    parser.add_argument("--walking-only", action="store_true", help="Chỉ giữ lớp COCO liên quan người đi bộ (ít báo nhầm nhưng bỏ sót đồ vật trong nhà)")
+    parser.add_argument("--no-enhance", action="store_true", help="Tắt cân bằng sáng tự động khi ảnh tối")
     parser.add_argument("--backend", choices=("auto", "dshow", "msmf"), default="auto", help="Backend camera OpenCV")
-    parser.add_argument("--width", type=int, default=640, help="Chiều rộng camera yêu cầu; driver có thể chọn khác")
-    parser.add_argument("--height", type=int, default=480, help="Chiều cao camera yêu cầu")
+    parser.add_argument("--width", type=int, default=1280, help="Chiều rộng camera yêu cầu; driver có thể chọn khác")
+    parser.add_argument("--height", type=int, default=720, help="Chiều cao camera yêu cầu")
     parser.add_argument("--rotation", type=int, choices=(0, 90, 180, 270), default=0, help="Xoay ảnh trước nhận diện")
     parser.add_argument("--mirror", action="store_true", help="Lật ngang ảnh trước nhận diện và mô tả")
     parser.add_argument("--max-age", type=positive_float, default=2.0, help="Tuổi tối đa của ảnh/kết quả, giây")
@@ -206,7 +217,7 @@ def run(args):
     from .display import Display
     from .feedback import FeedbackManager
     from .pipeline import PipelineWorker
-    from .speech import WindowsSpeechEngine
+    from .speech import FastSpeechEngine, WindowsSpeechEngine
 
     display = camera = pipeline = feedback = metrics = None
     try:
@@ -217,12 +228,18 @@ def run(args):
         camera = CameraWorker(args.source, backend=args.backend, width=args.width,
                               height=args.height, rotation=args.rotation, mirror=args.mirror,
                               stale_after=args.max_age, freeze_after=args.freeze_after)
-        feedback = FeedbackManager(WindowsSpeechEngine(backend=args.speech_backend, voice_id=args.voice_id),
-                                   enabled=not (args.mute or args.no_detect))
+        # auto = worker WinRT chạy sẵn (nhanh); winrt/sapi/onecore = engine cũ, mỗi câu một tiến trình.
+        engine = (FastSpeechEngine(voice_id=args.voice_id) if args.speech_backend == "auto"
+                  else WindowsSpeechEngine(backend=args.speech_backend, voice_id=args.voice_id))
+        feedback = FeedbackManager(engine, enabled=not (args.mute or args.no_detect))
         camera.start()
         if not args.no_detect:
-            pipeline = PipelineWorker(camera, lambda: YoloDetector(args.model, args.imgsz, args.conf,
-                                                                  args.iou, args.device), max_age=args.max_age)
+            # Import torch trong worker nạp model, không chặn vòng hiển thị.
+            pipeline = PipelineWorker(
+                camera, lambda: YoloDetector(args.model, args.imgsz, args.conf, args.iou,
+                                             resolve_device(args.device),
+                                             track=not args.no_track, walking_only=args.walking_only,
+                                             enhance=not args.no_enhance), max_age=args.max_age)
             pipeline.start()
         last_key = None
         last_audio_error = None

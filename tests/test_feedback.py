@@ -60,6 +60,17 @@ class FeedbackTests(unittest.TestCase):
         self.manager._step()
         self.assertEqual(len(self.engine.texts), 2)
 
+    def test_moving_object_does_not_cancel_speech_but_missing_object_does(self):
+        self.manager.submit(self.item(1, "người:left"))
+        self.manager._step()
+        stops = self.engine.stops
+        self.manager.submit(self.item(2, "người:right"))
+        self.manager._step()
+        self.assertEqual(self.engine.stops, stops)  # đổi vị trí: đọc tiếp, không cắt ngang
+        self.manager.submit(self.item(3, "xe:right"))
+        self.manager._step()
+        self.assertGreater(self.engine.stops, stops)  # người biến mất: hủy
+
     def test_new_scene_stops_old_speech(self):
         self.manager.submit(self.item())
         self.manager._step()

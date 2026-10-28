@@ -26,6 +26,7 @@ class Detection:
     label: str
     score: float
     bbox: tuple[float, float, float, float]
+    track_id: int | None = None  # Chỉ có khi tracker đã xác nhận đối tượng qua nhiều ảnh.
 
 
 @dataclass(frozen=True)

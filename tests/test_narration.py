@@ -63,7 +63,7 @@ class NarrationTests(unittest.TestCase):
 
     def test_unknown_class_has_explicit_generic_description(self):
         description = self.narrate(make_result([detect(label="custom object", class_id=200)]))
-        self.assertEqual(description.text, "Có vật thể chưa có bản dịch ở bên trái.")
+        self.assertEqual(description.text, "Có vật thể không rõ loại ở bên trái.")
         self.assertEqual(label_vi(""), UNKNOWN_LABEL_VI)
 
     def test_uses_labels_instead_of_assuming_custom_class_ids_are_coco(self):
@@ -106,6 +106,20 @@ class NarrationTests(unittest.TestCase):
         description = self.narrate(result, max_groups=3)
         self.assertEqual(description.groups, ("person:left", "car:left", "stop sign:left"))
         self.assertNotIn("ghế", description.text)
+
+    def test_many_people_do_not_crowd_out_objects(self):
+        result = make_result([
+            detect(bbox=(0, 0, 100, 100)), detect(bbox=(350, 0, 450, 100)), detect(bbox=(800, 0, 900, 100)),
+            detect("chair", bbox=(0, 0, 100, 100)), detect("cup", bbox=(800, 0, 900, 100)),
+        ])
+        description = self.narrate(result, max_groups=5)
+        self.assertEqual(description.text, "Có người ở bên trái, ở giữa ảnh và ở bên phải. "
+                                           "Có ghế ở bên trái. Có cốc ở bên phải.")
+        self.assertEqual(len(description.groups), 5)
+
+    def test_large_box_is_read_first_as_possibly_near(self):
+        result = make_result([detect(), detect("chair", bbox=(300, 0, 600, 300))])
+        self.assertEqual(self.narrate(result).text, "Có ghế ở giữa ảnh, có vẻ gần. Có người ở bên trái.")
 
     def test_length_limit_keeps_complete_sentences_and_matching_groups(self):
         result = make_result([detect(), detect("car")])

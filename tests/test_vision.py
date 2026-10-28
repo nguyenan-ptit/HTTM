@@ -276,13 +276,59 @@ class DetectorTests(unittest.TestCase):
         model_path = Path("fake_model_for_unit_test.pt")
         with patch.object(Path, "is_file", return_value=True), patch.object(Path, "mkdir"), patch.dict(os.environ):
             with patch.dict("sys.modules", {"ultralytics": SimpleNamespace(YOLO=Model)}):
-                result = YoloDetector(model_path).predict(self.frame)
+                result = YoloDetector(model_path, track=False, enhance=False).predict(self.frame)
         self.assertEqual(calls["load"], (str(model_path.resolve()), {"task": "detect"}))
         self.assertIs(calls["predict"]["source"], self.frame.image)
         self.assertEqual(calls["predict"]["iou"], 0.45)
         self.assertFalse(calls["predict"]["save"])
         self.assertEqual(result.frame, self.frame)
         self.assertGreaterEqual(result.inference_ms, 0)
+
+    def test_tracker_confirmation_filters_flicker_and_resets_on_new_session(self):
+        calls = []
+
+        def tracked(ids):
+            result = yolo_result([[0, 0, 1, 1], [1, 0, 2, 1]], [0.9, 0.8], [0, 0])
+            result.boxes.id = None if ids is None else Values(ids)
+            return result
+
+        outputs = iter([tracked([7, 8]), tracked(None)])
+
+        class Model:
+            names = {0: "person", 1: "bicycle", 46: "banana"}
+
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def track(self, **options):
+                calls.append(options)
+                return [next(outputs)]
+
+        with patch.object(Path, "is_file", return_value=True), patch.object(Path, "mkdir"), patch.dict(os.environ):
+            with patch.dict("sys.modules", {"ultralytics": SimpleNamespace(YOLO=Model)}):
+                detector = YoloDetector("fake_model_for_unit_test.pt", walking_only=True, enhance=False)
+        self.assertEqual(sorted(detector._classes), [0, 1])  # banana bị loại
+        first = detector.predict(self.frame)
+        self.assertEqual([d.track_id for d in first.detections], [7, 8])
+        self.assertEqual(calls[0]["classes"], detector._classes)
+        self.assertFalse(calls[0]["persist"])  # phiên đầu: tracker mới
+        again = detector.predict(Frame("session", 2, 10.1, Image()))
+        self.assertEqual(again.detections, ())  # chưa xác nhận thì không báo
+        self.assertTrue(calls[1]["persist"])
+        outputs = iter([tracked([1, 2])])
+        detector.predict(Frame("other", 1, 10.2, Image()))
+        self.assertFalse(calls[2]["persist"])  # phiên mới: bỏ track cũ
+
+    def test_custom_model_keeps_all_classes(self):
+        class Model:
+            names = {0: "custom obstacle"}
+
+            def __init__(self, *args, **kwargs):
+                pass
+
+        with patch.object(Path, "is_file", return_value=True), patch.object(Path, "mkdir"), patch.dict(os.environ):
+            with patch.dict("sys.modules", {"ultralytics": SimpleNamespace(YOLO=Model)}):
+                self.assertIsNone(YoloDetector("fake_model_for_unit_test.pt")._classes)
 
     def test_yolo_environment_is_configured_before_import_and_loading(self):
         captured = {}

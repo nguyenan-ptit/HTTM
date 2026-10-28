@@ -1,6 +1,6 @@
 # Prototype mô tả vật thể bằng tiếng Việt
 
-Luồng hiện tại: **camera điện thoại → DroidCam → OpenCV → YOLOv8n trên máy tính → câu tiếng Việt → TTS Windows → loa/tai nghe máy tính**. Chương trình mô tả loại vật thể và vị trí trong ảnh. Âm thanh không tự truyền về điện thoại qua DroidCam.
+Luồng hiện tại: **camera điện thoại → DroidCam → OpenCV → YOLO11s trên máy tính → câu tiếng Việt → TTS Windows → loa/tai nghe máy tính**. Chương trình mô tả loại vật thể và vị trí trong ảnh. Âm thanh không tự truyền về điện thoại qua DroidCam.
 
 Đã triển khai camera tự kết nối lại, nhận diện bất đồng bộ, nhãn Unicode, tạo câu, quản lý lời đọc và ghi số đo. Mức kiểm chứng thực tế được ghi tại [báo cáo kiểm chứng](docs/verification.md). Chưa có bằng chứng chạy toàn luồng với điện thoại và nghe tiếng Việt thành công trên máy này.
 
@@ -31,16 +31,16 @@ Nếu pip lỗi, xem [chẩn đoán cài thư viện](docs/phase-1-phone-camera-
 
 ```powershell
 .\.venv\Scripts\python.exe -m prototype.model_tools --download
-.\.venv\Scripts\python.exe -m prototype.model_tools --inspect yolov8n.pt
-.\.venv\Scripts\python.exe -m prototype.model_tools --classes yolov8n.pt
+.\.venv\Scripts\python.exe -m prototype.model_tools --inspect yolo11s.pt
+.\.venv\Scripts\python.exe -m prototype.model_tools --classes yolo11s.pt
 ```
 
-Model được tải từ release `v8.3.0` của [Ultralytics assets](https://github.com/ultralytics/assets/releases/tag/v8.3.0); công cụ ghi nguồn, kích thước, SHA-256 đo được và giấy phép vào `models/manifest.json`. SHA đo sau tải chưa phải so sánh với checksum độc lập của nhà phát hành; có thể thêm `--sha256 HEX` khi có digest đáng tin cậy. Nếu đã có model, dùng `--inspect`, kiểm tra nguồn/giấy phép và truyền đường dẫn bằng `--model`. `--classes` cần dependency inference và nạp model để liệt kê lớp thực tế, khác với `--inspect` chỉ đọc byte. Chỉ nạp `.pt` từ nguồn đáng tin cậy. Xem [ghi chú model](models/README.md).
+Model mặc định `yolo11s.pt` (chọn bằng benchmark, xem bên dưới); `--name yolo11m.pt` hoặc `yolo11n.pt` để đổi cỡ. Model được tải từ release `v8.3.0` của [Ultralytics assets](https://github.com/ultralytics/assets/releases/tag/v8.3.0); công cụ ghi nguồn, kích thước, SHA-256 đo được và giấy phép vào `models/manifest.json`. SHA đo sau tải chưa phải so sánh với checksum độc lập của nhà phát hành; có thể thêm `--sha256 HEX` khi có digest đáng tin cậy. Nếu đã có model, dùng `--inspect`, kiểm tra nguồn/giấy phép và truyền đường dẫn bằng `--model`. `--classes` cần dependency inference và nạp model để liệt kê lớp thực tế, khác với `--inspect` chỉ đọc byte. Chỉ nạp `.pt` từ nguồn đáng tin cậy. Xem [ghi chú model](models/README.md).
 
 4. Kiểm tra nhận diện và câu chữ khi tắt tiếng:
 
 ```powershell
-.\.venv\Scripts\python.exe -m prototype.main --source 1 --model yolov8n.pt --imgsz 320 --mute
+.\.venv\Scripts\python.exe -m prototype.main --source 1 --model yolo11s.pt --mute
 ```
 
 5. Sau khi thoát cửa sổ, kiểm tra riêng giọng. Lệnh đầu chỉ kiểm kê/tổng hợp RAM; lệnh thứ hai **phát mẫu qua loa/tai nghe máy tính**:
@@ -55,7 +55,7 @@ Phân biệt giọng đã cài, API thấy giọng, tổng hợp được và ng
 6. Chạy toàn luồng khi các bước trên đã đạt:
 
 ```powershell
-.\.venv\Scripts\python.exe -m prototype.main --source 1 --model yolov8n.pt --imgsz 320 --metrics reports/session.jsonl
+.\.venv\Scripts\python.exe -m prototype.main --source 1 --model yolo11s.pt --metrics reports/session.jsonl
 ```
 
 Nhấn **`m`** để bật/tắt tiếng, **`q`** hoặc đóng cửa sổ để thoát. `--no-detect` không phát giọng. Khi TTS lỗi, video và câu mô tả tiếp tục; sau khi khắc phục nguyên nhân có thể tắt rồi bật lại bằng `m` để thử lại. Không chạy nhiều phiên chiếm cùng camera.
@@ -72,10 +72,12 @@ Chạy `python -m prototype.main --help` để xem toàn bộ tùy chọn. Các 
 | --- | --- |
 | `--backend auto/dshow/msmf` | Backend camera, thay khi driver không tương thích. |
 | `--rotation 90`, `--mirror` | Xoay trước, lật ngang sau; nhận diện/mô tả cùng ảnh đã biến đổi. Kiểm chứng trái/phải thực tế. |
-| `--imgsz 320`, `--conf 0.45`, `--iou 0.45` | Cấu hình thử nghiệm; cần đánh giá bằng ảnh thật. 320 có thể bỏ sót vật nhỏ. |
+| `--imgsz 640`, `--conf 0.30`, `--iou 0.45` | Mặc định mới. 320 từng bỏ sót vật; conf thấp được bù bằng tracker (chỉ báo vật đã xác nhận qua ≥2 ảnh). |
+| `--device auto/cpu/0` | `auto` dùng GPU CUDA nếu có, không thì CPU. |
+| `--no-track`, `--walking-only`, `--no-enhance` | Tắt theo dõi ByteTrack; chỉ giữ lớp COCO liên quan người đi bộ (mặc định đọc cả 80 lớp, gồm đồ vật trong nhà); tắt cân bằng sáng tự động cho ảnh tối. |
 | `--max-age 2` | Thời hạn tối đa tính từ ngay sau `OpenCV.read()`, không phải từ lúc inference xong. |
 | `--freeze-after 5` | Tạm dừng mô tả nếu ảnh lặp tuyệt đối 5 giây; có thể báo nhầm cảnh tĩnh hoàn toàn. `0` tắt kiểm tra này và không phát hiện được kiểu đứng ảnh đó. |
-| `--speech-backend auto/winrt/sapi/onecore` | Backend giọng; chỉ chọn `vi`/`vi-VN`. |
+| `--speech-backend auto/winrt/sapi/onecore` | `auto` = worker WinRT chạy sẵn, đọc trong ~20 ms sau khi có câu; `winrt/sapi/onecore` = engine cũ, mỗi câu một tiến trình PowerShell (chậm 1–2 giây). Chỉ chọn `vi`/`vi-VN`. |
 | `--voice-id ID`, `--font PATH` | Chọn giọng Việt đã kiểm kê hoặc phông Unicode hỗ trợ tiếng Việt. |
 | `--metrics PATH` | JSONL số đo mỗi giây và thống kê cuối phiên. Tự thêm số vào tên khi trùng, giữ nguyên tệp cũ; không lưu ảnh hoặc nội dung lời đọc. |
 
@@ -84,6 +86,21 @@ Giao diện hiển thị kết quả YOLO trên **đúng ảnh nguồn của k�
 Camera FPS, YOLO FPS là tốc độ đo ở máy tính; `inference_ms` là thời gian toàn lời gọi predict và adapter hậu xử lý. Tuổi ảnh không bao gồm độ trễ chưa biết của điện thoại/DroidCam. Summary p50/p95 chỉ tính tối đa 10000 kết quả khác nhau được hiển thị cuối phiên; không phải độ trễ đầu cuối đến âm thanh.
 
 Không lưu/tải ảnh camera hoặc ghi âm mặc định. File số đo chỉ tạo khi truyền `--metrics`. Không đưa URL có mật khẩu, khóa hoặc dữ liệu riêng tư vào repository. YOLO/TTS hoạt động cục bộ sau khi chuẩn bị model/gói giọng; DroidCam vẫn cần kết nối Wi-Fi nội bộ hoặc USB đã chọn.
+
+## Đánh giá nhận diện
+
+Số đo trên máy dev (CPU, không GPU; ảnh mẫu `bus.jpg`/`zidane.jpg` của Ultralytics, 4 người + 1 xe buýt; chỉ là chỉ báo tương đối, chưa phải độ chính xác trên đường thật):
+
+| Cấu hình | ms/ảnh | Kết quả `bus.jpg` |
+| --- | --- | --- |
+| yolov8n, 320 (cũ) | 31 | bỏ sót 1 người |
+| yolov8n, 640 | 55 | đủ, độ tin cậy thấp hơn |
+| **yolo11s, 640 (mới)** | 109 | đủ, confidence cao |
+| yolo11m, 640 | 247 | đủ, chậm ~4 ảnh/s |
+
+Chạy toàn luồng (camera+tracking+câu) với video giả đạt ~5 ảnh/s do camera tranh CPU. Cân bằng sáng chỉ có lợi khi ảnh rất tối (độ sáng nhân ≤0.1). Tự đo lại bằng ảnh của bạn: `python -m tools.benchmark --images a.jpg --models yolo11n.pt yolo11s.pt --imgsz 320 640`.
+
+Chưa kiểm chứng: camera DroidCam thật, vật cản ngoài COCO (cột, bậc, hố), biển Việt Nam. Muốn nhận các vật đó cần fine-tune với ảnh tự gán nhãn.
 
 ## Kiểm thử và cấu trúc
 

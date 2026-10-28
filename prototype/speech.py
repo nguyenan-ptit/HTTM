@@ -10,10 +10,12 @@ import argparse
 import json
 import os
 from pathlib import Path
+import queue
 import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from typing import Any, BinaryIO
 
@@ -31,7 +33,7 @@ def is_vietnamese_language(language: str) -> bool:
     return language.strip().lower().replace("_", "-") in {"vi", "vi-vn"}
 
 
-def _command() -> list[str]:
+def _command(script: str = "windows_speech.ps1") -> list[str]:
     if os.name != "nt":
         raise SpeechError("TTS này cần Windows; video và text vẫn có thể chạy khi tắt tiếng.")
     # Windows PowerShell/.NET Framework supports the WinRT projection. Prefer
@@ -42,7 +44,7 @@ def _command() -> list[str]:
     if not executable_name:
         raise SpeechError("Không tìm thấy Windows PowerShell để truy cập giọng tiếng Việt.")
     return [executable_name, "-NoLogo", "-NoProfile", "-NonInteractive", "-STA",
-            "-ExecutionPolicy", "Bypass", "-File", str(Path(__file__).with_name("windows_speech.ps1"))]
+            "-ExecutionPolicy", "Bypass", "-File", str(Path(__file__).with_name(script))]
 
 
 def _decode_result(stdout: bytes, stderr: bytes, returncode: int) -> dict[str, Any]:
@@ -203,6 +205,170 @@ class WindowsSpeechEngine:
         self.stop()
 
 
+class FastSpeechEngine:
+    """Worker WinRT chạy sẵn: không tốn khởi động PowerShell cho mỗi câu, phát ngay khi tổng hợp xong.
+
+    Cùng giao diện start/poll/stop/close với WindowsSpeechEngine. stop() chỉ gửi lệnh dừng
+    và bỏ qua kết quả muộn theo id, nên hủy rất nhanh. Chỉ dùng giọng WinRT tiếng Việt.
+    """
+
+    def __init__(self, voice_id: str | None = None, timeout: float = 30.0) -> None:
+        if timeout <= 0 or timeout > 120:
+            raise ValueError("timeout phải lớn hơn 0 và không quá 120 giây")
+        self.voice_id, self.timeout = voice_id, timeout
+        self.status = "Chưa kiểm tra giọng tiếng Việt"
+        self.last_result: dict[str, Any] | None = None
+        self._process: subprocess.Popen[bytes] | None = None
+        self._stderr: BinaryIO | None = None
+        self._messages: queue.Queue[dict[str, Any]] = queue.Queue()
+        self._ready: dict[str, Any] | None = None
+        self._next_id = 0
+        self._id: int | None = None  # Câu đang chờ tổng hợp hoặc đang phát.
+        self._play_until: float | None = None
+        self._started_at = 0.0
+        try:
+            self._spawn()  # Khởi động sớm để câu đầu tiên không phải chờ nạp giọng.
+        except SpeechError:
+            pass  # start() sẽ thử lại và báo lỗi nếu vẫn không được.
+
+    def _spawn(self) -> None:
+        self._stderr = tempfile.TemporaryFile()
+        self._messages = queue.Queue()
+        self._ready = None
+        try:
+            process = subprocess.Popen(_command("windows_speech_server.ps1"), stdin=subprocess.PIPE,
+                                       stdout=subprocess.PIPE, stderr=self._stderr,
+                                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            assert process.stdin is not None and process.stdout is not None
+            process.stdin.write((json.dumps({"voiceId": self.voice_id}) + "\n").encode("utf-8"))
+            process.stdin.flush()
+        except (OSError, SpeechError) as exc:
+            self._close_stderr()
+            if isinstance(exc, SpeechError):
+                raise
+            raise SpeechError(f"Không mở được worker giọng: {exc}") from exc
+        self._process = process
+        # Reader riêng cho mỗi tiến trình, ghi vào hàng đợi của chính tiến trình đó.
+        threading.Thread(target=self._read, args=(process, self._messages), daemon=True).start()
+
+    @staticmethod
+    def _read(process: subprocess.Popen[bytes], messages: "queue.Queue[dict[str, Any]]") -> None:
+        for raw in process.stdout:  # type: ignore[union-attr]
+            try:
+                message = json.loads(raw.decode("utf-8-sig"))
+            except (ValueError, UnicodeDecodeError):
+                continue
+            if isinstance(message, dict):
+                messages.put(message)
+        messages.put({"exited": True})
+
+    def _close_stderr(self) -> None:
+        if self._stderr is not None:
+            self._stderr.close()
+            self._stderr = None
+
+    def _send(self, payload: dict[str, Any]) -> None:
+        try:
+            assert self._process is not None and self._process.stdin is not None
+            self._process.stdin.write((json.dumps(payload, ensure_ascii=False) + "\n").encode("utf-8"))
+            self._process.stdin.flush()
+        except (OSError, ValueError) as exc:
+            self._kill()
+            raise SpeechError("Worker giọng đã dừng; sẽ khởi động lại ở câu sau.") from exc
+
+    def _kill(self) -> None:
+        process, self._process = self._process, None
+        self._ready = None
+        self._id = self._play_until = None
+        if process is not None:
+            try:
+                process.kill()
+                process.wait(timeout=1.0)
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+        self._close_stderr()
+
+    def _drain(self) -> dict[str, Any] | None:
+        """Xử lý thông báo từ worker; trả về kết quả của câu hiện tại nếu có."""
+        current = None
+        while True:
+            try:
+                message = self._messages.get_nowait()
+            except queue.Empty:
+                return current
+            if message.get("exited"):
+                detail = ""
+                if self._stderr is not None:
+                    self._stderr.seek(0)
+                    detail = self._stderr.read().decode("utf-8", errors="replace").strip()[:400]
+                self._kill()
+                raise SpeechError("Worker giọng đã thoát. " + detail)
+            if "ready" in message:
+                if not message["ready"]:
+                    self._kill()
+                    raise SpeechError("Không đọc được tiếng Việt. " + str(message.get("error", "")))
+                self._ready = message
+            elif self._id is not None and message.get("id") == self._id:
+                current = message  # id cũ (câu đã hủy) bị bỏ qua.
+
+    def start(self, text: str) -> None:
+        if not text.strip() or len(text) > MAX_TEXT_LENGTH:
+            raise SpeechError(f"Câu đọc phải có 1–{MAX_TEXT_LENGTH} ký tự.")
+        if self._id is not None:
+            raise SpeechError("Engine đang đọc; FeedbackManager cần dừng hoặc đợi câu hiện tại.")
+        if self._process is None or self._process.poll() is not None:
+            self._kill()
+            self._spawn()
+        self._next_id += 1
+        self._id, self._play_until = self._next_id, None
+        self._started_at = time.monotonic()
+        self.last_result = None
+        self.status = "Đang chuẩn bị/đọc bằng giọng tiếng Việt"
+        try:
+            self._send({"action": "speak", "id": self._id, "text": text})
+        except SpeechError:
+            self._id = None
+            raise
+
+    def poll(self) -> str | None:
+        if self._id is None:
+            return None
+        try:
+            message = self._drain()
+        except SpeechError as exc:
+            self.status = f"Lỗi âm thanh: {exc}"
+            raise
+        now = time.monotonic()
+        if message is not None:
+            if message.get("error"):
+                self._id = None
+                self.status = "Lỗi âm thanh: " + str(message["error"])
+                raise SpeechError(self.status)
+            # Worker đã bắt đầu phát; độ dài lấy từ tiêu đề WAV.
+            self._play_until = now + message["ms"] / 1000.0 + 0.05
+            self.last_result = {"ok": True, "selectedVoice": {"name": (self._ready or {}).get("voice")},
+                                "playbackCompleted": None, "heardConfirmed": None}
+        if self._play_until is not None and now >= self._play_until:
+            self._id = self._play_until = None
+            self.last_result["playbackCompleted"] = True
+            self.status = "Đã phát xong (chưa xác nhận nghe)"
+            return "done"
+        if self._play_until is None and now - self._started_at > self.timeout:
+            self._kill()
+            self.status = "Lỗi âm thanh: hết thời gian tổng hợp/phát"
+            raise SpeechError(self.status)
+        return None
+
+    def stop(self) -> None:
+        if self._id is not None and self._process is not None:
+            self._send({"action": "stop"})
+        self._id = self._play_until = None
+        self.status = "Âm thanh đã dừng"
+
+    def close(self) -> None:
+        self._kill()
+
+
 def main(argv: list[str] | None = None) -> int:
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
@@ -213,6 +379,7 @@ def main(argv: list[str] | None = None) -> int:
     action.add_argument("--test", action="store_true", help="Phát câu mẫu tiếng Việt qua loa/tai nghe máy tính.")
     parser.add_argument("--backend", choices=BACKENDS, default="auto")
     parser.add_argument("--voice-id", help="ID chính xác từ --list-voices, chỉ nhận giọng vi/vi-VN.")
+    parser.add_argument("--legacy", action="store_true", help="Dùng engine cũ (mỗi câu một tiến trình) với --backend đã chọn.")
     args = parser.parse_args(argv)
     try:
         if args.list_voices:
@@ -224,7 +391,8 @@ def main(argv: list[str] | None = None) -> int:
         from .feedback import FeedbackManager
         from .types import Narration
 
-        engine = WindowsSpeechEngine(args.backend, args.voice_id, timeout=30.0)
+        engine = (WindowsSpeechEngine(args.backend, args.voice_id, timeout=30.0)
+                  if args.legacy else FastSpeechEngine(args.voice_id, timeout=30.0))
         manager = FeedbackManager(engine)
         try:
             created_at = time.monotonic()

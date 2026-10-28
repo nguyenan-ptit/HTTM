@@ -10,6 +10,11 @@ from typing import Callable, Protocol
 from .types import Narration
 
 
+def _labels(groups) -> set[str]:
+    """'người:left' → 'người'; nhóm không có vị trí giữ nguyên."""
+    return {group.rsplit(":", 1)[0] for group in groups}
+
+
 class SpeechEngine(Protocol):
     def start(self, text: str) -> None: ...
     def poll(self) -> str | None: ...
@@ -132,7 +137,9 @@ class FeedbackManager:
                     # A new frame can start a new utterance, but cannot revive
                     # an utterance whose last supporting evidence has expired.
                     self._cancel_locked("ttl")
-                elif not self._active.groups or not set(self._active.groups).issubset(narration.groups):
+                elif not self._active.groups or not _labels(self._active.groups).issubset(_labels(narration.groups)):
+                    # Chỉ hủy khi một vật đang được đọc biến mất; vật chỉ đổi vị trí thì đọc tiếp
+                    # (hủy liên tục làm không câu nào nghe trọn).
                     self._cancel_locked("scene_changed")
                 elif (narration.session_id == self._active.session_id and
                       narration.frame_id > evidence.frame_id and

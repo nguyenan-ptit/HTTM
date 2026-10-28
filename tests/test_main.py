@@ -109,7 +109,7 @@ class MainLoopTests(unittest.TestCase):
         args = build_parser().parse_args(["--source", "0", "--mute"])
         with patch("prototype.camera.CameraWorker", return_value=camera), \
              patch("prototype.pipeline.PipelineWorker", return_value=pipeline), \
-             patch("prototype.speech.WindowsSpeechEngine", return_value=engine), \
+             patch("prototype.speech.FastSpeechEngine", return_value=engine), \
              patch("prototype.display.Display", return_value=display):
             self.assertEqual(run(args), 0)
         self.assertIn("TTS lỗi kiểm thử", display.renders[-1][1]["audio_status"])

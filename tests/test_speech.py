@@ -8,7 +8,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from prototype.speech import SpeechError, WindowsSpeechEngine, _decode_result, is_vietnamese_language, list_voices, main
+from prototype.speech import FastSpeechEngine, SpeechError, WindowsSpeechEngine, _decode_result, is_vietnamese_language, list_voices, main
 
 
 class FakeProcess:
@@ -55,7 +55,7 @@ class SpeechTests(unittest.TestCase):
 
                 manager.submit.side_effect = submit
                 stdout, stderr = io.StringIO(), io.StringIO()
-                with patch("prototype.speech.WindowsSpeechEngine", return_value=engine), \
+                with patch("prototype.speech.FastSpeechEngine", return_value=engine), \
                      patch("prototype.feedback.FeedbackManager", return_value=manager) as factory, \
                      redirect_stdout(stdout), redirect_stderr(stderr):
                     code = main(["--test"])
@@ -171,6 +171,74 @@ class SpeechTests(unittest.TestCase):
         self.assertEqual(payload["action"], "probe")
         self.assertIn("người", payload["text"])
         self.assertNotIn("shell", call.kwargs)
+
+
+class FakeServer:
+    def __init__(self, *args, **kwargs):
+        self.stdin = io.BytesIO()
+        self.stdin.close = lambda: None
+        self.stdout = iter(())
+        self.returncode = None
+
+    def poll(self):
+        return self.returncode
+
+    def kill(self):
+        self.returncode = -1
+
+    def wait(self, timeout=None):
+        return self.returncode
+
+
+@patch("prototype.speech._command", return_value=["worker"])
+@patch("prototype.speech.subprocess.Popen", side_effect=FakeServer)
+@patch.object(FastSpeechEngine, "_read", staticmethod(lambda process, messages: None))
+class FastSpeechEngineTests(unittest.TestCase):
+    def sent(self, engine):
+        return [json.loads(line) for line in engine._process.stdin.getvalue().decode("utf-8").splitlines()]
+
+    def test_one_server_serves_many_sentences_and_reports_done_after_wav_length(self, popen, _command):
+        engine = FastSpeechEngine()
+        engine._messages.put({"ready": True, "voice": "Microsoft An"})
+        with patch("prototype.speech.time.monotonic", side_effect=[1.0, 1.1, 3.0]):
+            engine.start("Có người ở bên trái.")
+            self.assertEqual(self.sent(engine)[1], {"action": "speak", "id": 1, "text": "Có người ở bên trái."})
+            engine._messages.put({"id": 1, "ms": 1000})
+            self.assertIsNone(engine.poll())      # đang phát
+            self.assertEqual(engine.poll(), "done")  # hết độ dài WAV
+        self.assertEqual(engine.last_result["selectedVoice"]["name"], "Microsoft An")
+        engine.start("Có ô tô ở giữa ảnh.")
+        self.assertEqual(popen.call_count, 1)  # không mở tiến trình mới cho câu sau
+
+    def test_stop_sends_stop_and_ignores_late_audio_of_cancelled_sentence(self, popen, _command):
+        engine = FastSpeechEngine()
+        engine.start("Có người.")
+        engine.stop()
+        self.assertEqual(self.sent(engine)[-1], {"action": "stop"})
+        engine._messages.put({"id": 1, "ms": 500})  # kết quả muộn của câu đã hủy
+        engine.start("Có xe.")
+        self.assertIsNone(engine.poll())  # id 1 bị bỏ qua, id 2 chưa có kết quả
+        self.assertIsNone(engine._play_until)
+
+    def test_worker_error_and_exit_surface_and_next_start_respawns(self, popen, _command):
+        engine = FastSpeechEngine()
+        engine.start("Có người.")
+        engine._messages.put({"id": 1, "error": "Tổng hợp lỗi"})
+        with self.assertRaisesRegex(SpeechError, "Tổng hợp lỗi"):
+            engine.poll()
+        engine.start("Có người.")
+        engine._messages.put({"exited": True})
+        with self.assertRaisesRegex(SpeechError, "đã thoát"):
+            engine.poll()
+        engine.start("Có người.")
+        self.assertEqual(popen.call_count, 2)  # lần đầu + sau khi worker thoát
+
+    def test_missing_vietnamese_voice_is_reported(self, popen, _command):
+        engine = FastSpeechEngine()
+        engine.start("Có người.")
+        engine._messages.put({"ready": False, "error": "Không có giọng"})
+        with self.assertRaisesRegex(SpeechError, "Không có giọng"):
+            engine.poll()
 
 
 if __name__ == "__main__":

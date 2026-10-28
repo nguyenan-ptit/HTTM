@@ -2,13 +2,13 @@
 
 ## 0. Ưu tiên hiện tại: DroidCam → YOLO → chữ tiếng Việt → giọng cảnh báo tiếng Việt
 
-Người dùng chọn prototype trên máy tính: điện thoại thu hình qua DroidCam; Python + OpenCV + YOLOv8n trên máy tính nhận diện vật thể, tạo câu tiếng Việt có dấu và đọc câu đó để thông báo cho người khiếm thị. **Nội dung hiển thị và giọng đọc dùng tiếng Việt.** Chưa triển khai ứng dụng Android hoặc inference trên điện thoại.
+Người dùng chọn prototype trên máy tính: điện thoại thu hình qua DroidCam; Python + OpenCV + YOLO11s trên máy tính nhận diện vật thể, tạo câu tiếng Việt có dấu và đọc câu đó để thông báo cho người khiếm thị. **Nội dung hiển thị và giọng đọc dùng tiếng Việt.** Chưa triển khai ứng dụng Android hoặc inference trên điện thoại.
 
 - Đọc [hướng dẫn giai đoạn 1](docs/phase-1-phone-camera-yolo.md), [luồng mô tả vật thể](docs/object-narration.md) và [giọng tiếng Việt trên Windows](docs/windows-vietnamese-voice.md). Tài liệu giai đoạn 1 mô tả mốc nền 1A–1B; yêu cầu hiện tại bổ sung text và TTS theo mục này.
-- Thứ tự: xem được camera thật qua DroidCam → nhận diện bằng YOLOv8n → chuyển kết quả thành câu tiếng Việt → đọc bằng giọng tiếng Việt → đánh giá/bổ sung nhận diện biển báo còn thiếu.
+- Thứ tự: xem được camera thật qua DroidCam → nhận diện bằng YOLO11s → chuyển kết quả thành câu tiếng Việt → đọc bằng giọng tiếng Việt → đánh giá/bổ sung nhận diện biển báo còn thiếu.
 - Đầu ra gồm một vùng video có hộp bao, nhãn và confidence; câu mô tả tiếng Việt; trạng thái camera/model/âm thanh và chỉ số hiệu năng đo được. TTS chạy bất đồng bộ để video tiếp tục cập nhật.
 - Cảnh báo hiện tại là thông báo loại vật thể và vị trí trong ảnh. Không suy khoảng cách, mức nguy hiểm, hướng tránh hoặc thời điểm sang đường chỉ từ kết quả YOLO.
-- YOLOv8n pretrained COCO hỗ trợ một số đối tượng phổ biến, có `stop sign` và `traffic light`; chưa nhận đầy đủ biển báo Việt Nam hoặc màu đèn. Phân biệt phát hiện biển, phân loại ý nghĩa biển và OCR đọc chữ.
+- YOLO11s pretrained COCO hỗ trợ một số đối tượng phổ biến, có `stop sign` và `traffic light`; chưa nhận đầy đủ biển báo Việt Nam hoặc màu đèn. Phân biệt phát hiện biển, phân loại ý nghĩa biển và OCR đọc chữ.
 - Chưa yêu cầu GPS, định tuyến, SOS, đo khoảng cách, OCR, STT, tối ưu INT8 hoặc xây dựng mobile trong mốc hiện tại.
 - AI và TTS chạy trên máy tính; âm thanh phát qua loa/tai nghe của máy tính. DroidCam không tự chuyển âm thanh cảnh báo về điện thoại. Đích sản phẩm cuối vẫn là xử lý trên điện thoại.
 
@@ -50,7 +50,7 @@ Luồng bắt buộc của prototype:
 
 ```text
 Camera điện thoại → DroidCam (Wi-Fi/USB) → Webcam ảo → OpenCV
-    → YOLOv8n → Detection của đúng khung hình còn mới
+    → YOLO11s → Detection của đúng khung hình còn mới
         ├→ Video: hộp bao + nhãn tiếng Việt + confidence
         └→ Narration: loại vật thể + vị trí trong ảnh → câu tiếng Việt có dấu
             → FeedbackManager → TTS tiếng Việt → loa/tai nghe máy tính
@@ -78,7 +78,7 @@ Giữ môi trường `.venv` đã dùng. Chỉ chạy các lệnh sau khi thực
 .\.venv\Scripts\python.exe -m prototype.main --source 1 --no-detect
 
 # 2. Thoát bước 1, kiểm tra YOLO và câu chữ trước.
-.\.venv\Scripts\python.exe -m prototype.main --source 1 --model yolov8n.pt --imgsz 320 --mute
+.\.venv\Scripts\python.exe -m prototype.main --source 1 --model yolo11s.pt --mute
 
 # 3. Kiểm tra giọng; không phát qua loa (có thể tổng hợp mẫu vào RAM).
 .\.venv\Scripts\python.exe -m prototype.speech --list-voices
@@ -87,10 +87,10 @@ Giữ môi trường `.venv` đã dùng. Chỉ chạy các lệnh sau khi thực
 .\.venv\Scripts\python.exe -m prototype.speech --test
 
 # 5. Chạy đầy đủ camera → YOLO → text → giọng tiếng Việt.
-.\.venv\Scripts\python.exe -m prototype.main --source 1 --model yolov8n.pt --imgsz 320
+.\.venv\Scripts\python.exe -m prototype.main --source 1 --model yolo11s.pt
 ```
 
-Nhấn `m` để bật/tắt âm thanh và `q` để thoát cửa sổ prototype. Không chạy đồng thời nhiều phiên chiếm cùng camera. `--imgsz 320` là lựa chọn thử giảm tải CPU, có thể giảm khả năng phát hiện vật nhỏ; cần đánh giá bằng dữ liệu thật.
+Nhấn `m` để bật/tắt âm thanh và `q` để thoát cửa sổ prototype. Không chạy đồng thời nhiều phiên chiếm cùng camera. `--imgsz 640` là mặc định (320 từng bỏ sót vật nhỏ; hạ xuống nếu CPU không đủ nhanh); cần đánh giá bằng dữ liệu thật.
 
 ## 1. Mục tiêu và phạm vi
 
@@ -116,7 +116,7 @@ Nhấn `m` để bật/tắt âm thanh và `q` để thoát cửa sổ prototype
 | Giai đoạn | Kết quả cần đạt |
 | --- | --- |
 | 1A — Kết nối camera, làm trước | DroidCam truyền video từ điện thoại qua Wi-Fi nội bộ hoặc USB; Python/OpenCV nhận webcam ảo, hiển thị và xử lý mất kết nối. |
-| 1B — Nhận diện cơ bản | YOLOv8n trên máy tính; video có hộp bao, nhãn, confidence; ghi đúng lớp hỗ trợ và các chỉ số đo được. |
+| 1B — Nhận diện cơ bản | YOLO11s trên máy tính; video có hộp bao, nhãn, confidence; ghi đúng lớp hỗ trợ và các chỉ số đo được. |
 | 1B mở rộng — Text và giọng tiếng Việt | Chuyển kết quả YOLO thành câu tiếng Việt có dấu; hiển thị và đọc bằng TTS tiếng Việt; xử lý lỗi giọng, dữ liệu cũ, hủy và chống đọc lặp. |
 | 1C — Biển báo | Kiểm tra stop sign/traffic light của model có sẵn; xác định các lớp biển cần bổ sung, huấn luyện hoặc chọn model phù hợp và đánh giá riêng. |
 | 2 — Nền tảng mobile | Sau prototype: camera và AI trực tiếp trên điện thoại, quyền, giao diện tiếp cận, TTS và trạng thái lỗi. |
@@ -130,7 +130,7 @@ Không bắt buộc hoàn thành mọi giai đoạn trong một lần sửa. Ho�
 
 ## 4. Công nghệ dự kiến và cách lựa chọn
 
-Hiện tại: DroidCam + Python + OpenCV + thư viện Ultralytics, model YOLOv8n dạng `.pt` trên máy tính; `narration.py` tạo câu tiếng Việt, Pillow/phông Unicode hiển thị chữ và worker Windows đọc TTS cục bộ. CPU chạy được trước, GPU chỉ dùng khi môi trường hỗ trợ. Dùng các backend giọng hiện có, không cài thêm engine chỉ vì thư viện khác cũng hỗ trợ TTS. Bảng dưới là định hướng khi chuyển sang mobile, không phải danh sách dependency cần cài ngay.
+Hiện tại: DroidCam + Python + OpenCV + thư viện Ultralytics, model YOLO11s dạng `.pt` trên máy tính; `narration.py` tạo câu tiếng Việt, Pillow/phông Unicode hiển thị chữ và worker Windows đọc TTS cục bộ. CPU chạy được trước, GPU chỉ dùng khi môi trường hỗ trợ. Dùng các backend giọng hiện có, không cài thêm engine chỉ vì thư viện khác cũng hỗ trợ TTS. Bảng dưới là định hướng khi chuyển sang mobile, không phải danh sách dependency cần cài ngay.
 
 | Chức năng | Mặc định cho dự án mới |
 | --- | --- |
@@ -143,7 +143,7 @@ Hiện tại: DroidCam + Python + OpenCV + thư viện Ultralytics, model YOLOv8
 | Lệnh và giọng nói | Adapter STT và Native TTS; kiểm tra khả năng tiếng Việt, model và chế độ ngoại tuyến. |
 | Lập tuyến | Adapter RouteProvider; dự kiến Google Maps Routes API cho yêu cầu lập/tính lại tuyến. |
 | Dữ liệu cục bộ | SQLite; có thể dùng Room trên Android cho dữ liệu có cấu trúc. |
-| Đối chiếu prototype máy tính | Python + OpenCV + YOLOv8n; tạo câu tiếng Việt và dùng worker WinRT/SAPI/SAPI-OneCore hiện có, chưa phải runtime TTS của Android. |
+| Đối chiếu prototype máy tính | Python + OpenCV + YOLO11s; tạo câu tiếng Việt và dùng worker WinRT/SAPI/SAPI-OneCore hiện có, chưa phải runtime TTS của Android. |
 
 - Nếu đã chọn Flutter, giữ Flutter cho ứng dụng và tích hợp camera, cảm biến, inference qua adapter/plugin native khi cần. Không gọi Flutter là Android native Kotlin.
 - Không triển khai đồng thời TFLite và ONNX chỉ để có đủ tên công nghệ.
@@ -159,7 +159,7 @@ Luồng của giai đoạn hiện tại (các tác vụ nặng chạy độc l�
 
 ```text
 Camera điện thoại → DroidCam qua Wi-Fi/USB → Webcam ảo → Python/OpenCV
-    → YOLOv8n → Giải mã/NMS trong thư viện → Detection còn hiệu lực
+    → YOLO11s → Giải mã/NMS trong thư viện → Detection còn hiệu lực
         ├→ Hiển thị ảnh nguồn + hộp bao + nhãn + confidence
         └→ Narration → Text tiếng Việt có dấu → FeedbackManager
             → TTS tiếng Việt → Loa/tai nghe máy tính

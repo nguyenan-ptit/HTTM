@@ -9,7 +9,9 @@ import shutil
 import sys
 import urllib.request
 
-MODEL_URL = "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8n.pt"
+MODEL_BASE_URL = "https://github.com/ultralytics/assets/releases/download/v8.3.0/"
+DEFAULT_MODEL = "yolo11s.pt"  # Cân bằng chính xác/tốc độ CPU; xem README mục chọn model.
+MAX_MODEL_BYTES = 100 * 1024 * 1024
 LICENSE_URL = "https://www.ultralytics.com/license"
 
 
@@ -21,7 +23,11 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def download_model(output: Path, manifest: Path, expected_sha256: str | None = None) -> dict:
+def download_model(output: Path, manifest: Path, expected_sha256: str | None = None,
+                   name: str = DEFAULT_MODEL) -> dict:
+    if not (name.endswith(".pt") and name[:-3].replace("-", "").replace(".", "").isalnum()):
+        raise ValueError("Tên model phải có dạng yolo11s.pt, không chứa đường dẫn.")
+    model_url = MODEL_BASE_URL + name
     partial = output.with_suffix(output.suffix + ".partial")
     if manifest.resolve() in (output.resolve(), partial.resolve()):
         raise ValueError("Đường dẫn manifest phải khác model và tệp .partial.")
@@ -35,18 +41,18 @@ def download_model(output: Path, manifest: Path, expected_sha256: str | None = N
     owns_partial = False
     owns_output = False
     try:
-        request = urllib.request.Request(MODEL_URL, headers={"User-Agent": "HTTM2-prototype/0.1"})
+        request = urllib.request.Request(model_url, headers={"User-Agent": "HTTM2-prototype/0.1"})
         with partial.open("xb") as handle:
             owns_partial = True
             with urllib.request.urlopen(request, timeout=30) as response:
                 size = 0
                 while block := response.read(1024 * 1024):
                     size += len(block)
-                    if size > 50 * 1024 * 1024:
-                        raise ValueError("Tệp vượt giới hạn 50 MiB cho YOLOv8n.")
+                    if size > MAX_MODEL_BYTES:
+                        raise ValueError("Tệp vượt giới hạn 100 MiB cho model YOLO.")
                     handle.write(block)
         if size < 1024 * 1024:
-            raise ValueError("Tệp tải về quá nhỏ; có thể không phải model YOLOv8n.")
+            raise ValueError("Tệp tải về quá nhỏ; có thể không phải model YOLO.")
         digest = sha256_file(partial)
         if expected_sha256 and digest != expected_sha256.lower():
             raise ValueError("Checksum khác SHA-256 mong đợi; không sử dụng tệp tải về.")
@@ -64,8 +70,8 @@ def download_model(output: Path, manifest: Path, expected_sha256: str | None = N
         if owns_partial and partial.is_file():
             partial.unlink()
     record = {
-        "model": "YOLOv8n", "task": "detect", "dataset": "COCO (80 lớp)",
-        "source": MODEL_URL, "release": "v8.3.0", "file": str(output),
+        "model": name[:-3], "task": "detect", "dataset": "COCO (80 lớp)",
+        "source": model_url, "release": "v8.3.0", "file": str(output),
         "size_bytes": size, "sha256": digest,
         "checksum_verification": "compared-to-user-supplied-digest" if expected_sha256 else "measured-after-download",
         "license": "Ultralytics AGPL-3.0 hoặc Enterprise; xem điều kiện tại nguồn",
@@ -82,12 +88,13 @@ def main(argv=None) -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
         sys.stderr.reconfigure(encoding="utf-8")
-    parser = argparse.ArgumentParser(description="Chuẩn bị và kiểm tra model YOLOv8n cục bộ.")
+    parser = argparse.ArgumentParser(description="Chuẩn bị và kiểm tra model YOLO cục bộ.")
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--download", action="store_true", help="Tải model từ release Ultralytics cố định")
     mode.add_argument("--inspect", type=Path, metavar="FILE", help="Tính SHA-256; không nạp pickle/model")
     mode.add_argument("--classes", type=Path, metavar="FILE", help="Nạp model .pt tin cậy cục bộ để kiểm kê lớp thực tế")
-    parser.add_argument("--output", type=Path, default=Path("yolov8n.pt"), help="Tệp model sẽ tải")
+    parser.add_argument("--name", default=DEFAULT_MODEL, help="Tên model trong release v8.3.0, ví dụ yolo11s.pt, yolo11m.pt")
+    parser.add_argument("--output", type=Path, help="Tệp model sẽ tải; mặc định theo --name")
     parser.add_argument("--manifest", type=Path, default=Path("models/manifest.json"))
     parser.add_argument("--sha256", help="SHA-256 mong đợi từ nguồn đáng tin cậy, nếu có")
     args = parser.parse_args(argv)
@@ -95,7 +102,7 @@ def main(argv=None) -> int:
         parser.error("--sha256 phải gồm 64 ký tự hex.")
     try:
         if args.download:
-            record = download_model(args.output, args.manifest, args.sha256)
+            record = download_model(args.output or Path(args.name), args.manifest, args.sha256, args.name)
         elif args.classes:
             if args.sha256 and sha256_file(args.classes) != args.sha256.lower():
                 raise ValueError("Checksum khác SHA-256 mong đợi; không nạp model.")
