@@ -1,19 +1,18 @@
-# Model cho prototype
+# Model cho hệ thống HTTM
 
-Model mặc định: Ultralytics **YOLOv8n detection**, pretrained COCO 80 lớp, định dạng `.pt`. Không thêm tên lớp để giả lập khả năng nhận diện biển mới.
+Model mặc định: Ultralytics **YOLO11n detection (`yolo11n.pt`)**, pretrained COCO 80 lớp, định dạng `.pt` (hỗ trợ cả `yolo11s.pt`, `yolov8n.pt`, `yolov8s.pt`).
 
-Nguồn cố định: https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8n.pt
+Nguồn cố định: https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11n.pt
 
 ```powershell
 .\.venv\Scripts\python.exe -m prototype.model_tools --download
-.\.venv\Scripts\python.exe -m prototype.model_tools --inspect yolov8n.pt
-.\.venv\Scripts\python.exe -m prototype.model_tools --classes yolov8n.pt
+.\.venv\Scripts\python.exe -m prototype.model_tools --inspect yolo11n.pt
+.\.venv\Scripts\python.exe -m prototype.model_tools --classes yolo11n.pt
 ```
 
-Sau tải thành công, `models/manifest.json` ghi release, URL, SHA-256 thực đo, số byte và thời điểm. Repository không ghi checksum giả khi chưa tải được tệp. Có thể đối chiếu digest độc lập bằng `--sha256 HEX`. Nếu tải ngoài công cụ này, cần lưu nguồn/phiên bản/giấy phép/checksum thực tế riêng; `--inspect` không chứng minh nguồn model và không thực thi/nạp model.
+Sau khi tải thành công, `models/manifest.json` ghi release, URL, SHA-256 thực đo, kích thước và thời điểm tải. Có thể đối chiếu digest độc lập bằng `--sha256 HEX`.
 
-`--classes` nạp model `.pt` cục bộ tin cậy (cần dependency inference) và liệt kê `class_id`, tên gốc, bản dịch, khả năng có nhãn `stop sign`/`traffic light`. Đây là kiểm kê lớp, chưa phải đánh giá nhận diện thực tế. Công cụ tải không ghi đè model, manifest hoặc tệp tải dở có sẵn.
+- `--inspect`: tính SHA-256 mà không thực thi hay nạp pickle/model.
+- `--classes`: nạp model `.pt` cục bộ tin cậy và liệt kê `class_id`, tên gốc và bản dịch tiếng Việt.
 
-[Giấy phép Ultralytics](https://www.ultralytics.com/license): AGPL-3.0 hoặc Enterprise tùy điều kiện sử dụng; đọc điều kiện của nhà phát hành trước khi phân phối sản phẩm/model. Dữ liệu COCO và các thư viện liên quan có điều kiện riêng; xem [trang dữ liệu COCO của Ultralytics](https://docs.ultralytics.com/datasets/detect/coco/). Công cụ này không đóng gói model hoặc cấp lại quyền sử dụng.
-
-YOLOv8n COCO có `stop sign` và `traffic light`. Phát hiện `traffic light` không phân loại màu đèn; COCO chưa bao quát hệ thống biển Việt Nam. Kiểm chứng chất lượng riêng trên dữ liệu có quyền sử dụng trước khi bổ sung model.
+[Giấy phép Ultralytics](https://www.ultralytics.com/license): AGPL-3.0 hoặc Enterprise tùy điều kiện sử dụng.

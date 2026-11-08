@@ -96,7 +96,7 @@ def main(argv=None) -> int:
     mode.add_argument("--inspect", type=Path, metavar="FILE", help="Tính SHA-256; không nạp pickle/model")
     mode.add_argument("--classes", type=Path, metavar="FILE", help="Nạp model .pt tin cậy cục bộ để kiểm kê lớp thực tế")
     parser.add_argument("--output", type=Path, default=Path("yolo11n.pt"), help="Tệp model sẽ tải (yolo11n.pt, yolo11s.pt, yolov8n.pt)")
-    parser.add_argument("--manifest", type=Path, default=Path("models/manifest-yolo11n.json"))
+    parser.add_argument("--manifest", type=Path, default=Path("models/manifest.json"))
     parser.add_argument("--sha256", help="SHA-256 mong đợi từ nguồn đáng tin cậy, nếu có")
     args = parser.parse_args(argv)
     if args.sha256 and (len(args.sha256) != 64 or any(c not in "0123456789abcdefABCDEF" for c in args.sha256)):

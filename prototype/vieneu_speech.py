@@ -144,6 +144,7 @@ class VieNeuSpeechEngine:
         except InterruptedError:
             return
         except urllib.error.HTTPError as exc:
+            exc.close()
             error = {401: "Khóa API không hợp lệ.", 403: "Khóa API không có quyền.",
                      429: "Vượt hạn mức API."}.get(exc.code, f"API trả mã lỗi {exc.code}.")
         except Exception as exc:  # Không đưa thông điệp thô vào lỗi: có thể chứa URL/khóa.

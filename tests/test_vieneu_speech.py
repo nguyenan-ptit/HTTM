@@ -68,7 +68,8 @@ class VieNeuEngineTests(unittest.TestCase):
 
     def test_http_error_hides_key_and_raises(self):
         def opener(request, timeout):
-            raise urllib.error.HTTPError(request.full_url, 401, "no", {}, None)
+            fp = io.BytesIO(b"")
+            raise urllib.error.HTTPError(request.full_url, 401, "no", {}, fp)
 
         engine = self.engine(opener)
         engine.start("xin chào")
