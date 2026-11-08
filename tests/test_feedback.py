@@ -272,6 +272,7 @@ class FeedbackTests(unittest.TestCase):
         self.assertEqual(self.manager.snapshot().last_event, "cancelled:no_detection")
         self.assertEqual(self.manager.snapshot().utterances_cancelled, 2)
 
+<<<<<<< HEAD
     def test_hold_seconds_keeps_active_speech_across_brief_blur_or_shake(self):
         manager = FeedbackManager(self.engine, hold_seconds=0.8, clock=lambda: self.now, autostart=False)
         self.addCleanup(manager.close)
@@ -320,6 +321,8 @@ class FeedbackTests(unittest.TestCase):
         self.assertEqual(manager.snapshot().utterances_completed, 1)
         self.assertEqual(manager.snapshot().utterances_cancelled, 0)
 
+=======
+>>>>>>> origin/main
 
 class DelayedPlaybackTests(unittest.TestCase):
     def test_continuous_fresh_evidence_allows_two_point_five_second_startup(self):

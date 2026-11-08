@@ -69,13 +69,21 @@ class Display:
             vw, vh = int(frame.width * scale), int(frame.height * scale)
             left, top = (self.width - vw) // 2, 50 + (self.video_height - vh) // 2
             canvas.paste(video.resize((vw, vh)), (left, top))
+<<<<<<< HEAD
             from .narration import display_label_vi
+=======
+            from .narration import label_vi
+>>>>>>> origin/main
             for detection in detections:
                 x1, y1, x2, y2 = detection.bbox
                 box = (left + x1 * scale, top + y1 * scale,
                        left + x2 * scale, top + y2 * scale)
                 draw.rectangle(box, outline=(52, 211, 153), width=3)
+<<<<<<< HEAD
                 label = f"{display_label_vi(detection.label)} {detection.score:.0%}"
+=======
+                label = f"{label_vi(detection.label)} {detection.score:.0%}"
+>>>>>>> origin/main
                 tx, ty = box[0], max(top, box[1] - 26)
                 tw = draw.textlength(label, font=self.small)
                 tx = max(left, min(tx, left + vw - tw - 8))

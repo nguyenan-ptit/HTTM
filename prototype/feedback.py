@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 """Một worker sở hữu TTS; API giao diện không chờ thao tác của engine."""
+=======
+﻿"""Một worker sở hữu TTS; API giao diện không chờ thao tác của engine."""
+>>>>>>> origin/main
 
 from collections import OrderedDict
 from dataclasses import dataclass
@@ -34,6 +38,7 @@ class FeedbackSnapshot:
 
 class FeedbackManager:
     def __init__(self, engine: SpeechEngine, *, enabled: bool = True,
+<<<<<<< HEAD
                  repeat_interval: float = 6.0, hold_seconds: float = 0.0,
                  finish_utterance: bool = False,
                  clock: Callable[[], float] = time.monotonic,
@@ -47,6 +52,15 @@ class FeedbackManager:
         self._repeat_interval = repeat_interval
         self._hold_seconds = hold_seconds
         self._finish_utterance = finish_utterance
+=======
+                 repeat_interval: float = 6.0, clock: Callable[[], float] = time.monotonic,
+                 autostart: bool = True):
+        if not math.isfinite(repeat_interval) or repeat_interval < 0:
+            raise ValueError("Khoảng chống đọc lặp phải không âm.")
+        self._engine = engine
+        self._clock = clock
+        self._repeat_interval = repeat_interval
+>>>>>>> origin/main
         self._condition = threading.Condition(threading.RLock())
         # Only the worker executes engine IO. This also protects deterministic
         # _step calls from accidentally running alongside a worker or each other.
@@ -93,6 +107,7 @@ class FeedbackManager:
             if changed:
                 self._last_frame = -1
                 self._completed.clear()
+<<<<<<< HEAD
             if changed:
                 self._pending = None
                 self._cancel_locked("session_changed")
@@ -100,6 +115,11 @@ class FeedbackManager:
                 self._pending = None
                 if not (self._finish_utterance and self._active and self._active_started):
                     self._cancel_locked("camera_or_model_unavailable")
+=======
+            if changed or (self._healthy and not healthy):
+                self._pending = None
+                self._cancel_locked("session_changed" if changed else "camera_or_model_unavailable")
+>>>>>>> origin/main
             self._session = session_id
             self._healthy = healthy
             self._condition.notify_all()
@@ -126,6 +146,7 @@ class FeedbackManager:
         with self._condition:
             if self._closed:
                 return False
+<<<<<<< HEAD
             now = self._clock()
             if narration is None:
                 if self._pending or self._active:
@@ -138,10 +159,18 @@ class FeedbackManager:
                             now - evidence.source_captured_at < self._hold_seconds):
                         self._pending = None
                         return False
+=======
+            if narration is None:
+                if self._pending or self._active:
+>>>>>>> origin/main
                     self._cancel_locked("no_detection")
                 self._pending = None
                 self._condition.notify_all()
                 return False
+<<<<<<< HEAD
+=======
+            now = self._clock()
+>>>>>>> origin/main
             if not self._valid(narration, now) or narration.frame_id <= self._last_frame:
                 return False
             self._last_frame = narration.frame_id
@@ -150,12 +179,18 @@ class FeedbackManager:
                 if evidence is None or not self._valid(evidence, now):
                     # A new frame can start a new utterance, but cannot revive
                     # an utterance whose last supporting evidence has expired.
+<<<<<<< HEAD
                     if not (self._finish_utterance and self._active_started):
                         self._cancel_locked("ttl")
                 elif not self._active.groups or not set(self._active.groups).issubset(narration.groups):
                     if not (self._finish_utterance or
                             (self._hold_seconds > 0 and now - evidence.source_captured_at < self._hold_seconds)):
                         self._cancel_locked("scene_changed")
+=======
+                    self._cancel_locked("ttl")
+                elif not self._active.groups or not set(self._active.groups).issubset(narration.groups):
+                    self._cancel_locked("scene_changed")
+>>>>>>> origin/main
                 elif (narration.session_id == self._active.session_id and
                       narration.frame_id > evidence.frame_id and
                       narration.source_captured_at > evidence.source_captured_at):
@@ -182,10 +217,13 @@ class FeedbackManager:
                                     evidence.frame_id if evidence else None)
 
     def _active_valid_locked(self, item: Narration, epoch: int, now: float) -> bool:
+<<<<<<< HEAD
         if self._finish_utterance and self._active_started:
             return (self._active is item and self._active_epoch == epoch == self._epoch and
                     not self._cancel and self._enabled and not self._closed and
                     item.session_id == self._session)
+=======
+>>>>>>> origin/main
         return (self._active is item and self._active_epoch == epoch == self._epoch and
                 not self._cancel and self._active_evidence is not None and
                 self._valid(self._active_evidence, now))

@@ -40,6 +40,7 @@ def build_parser():
                         help="Số nguồn OpenCV thực tế, hoặc tệp/URL video đã kiểm tra")
     parser.add_argument("--no-detect", action="store_true", help="Chỉ xem camera, không nạp model hoặc phát giọng")
     parser.add_argument("--mute", action="store_true", help="Khởi động với âm thanh tắt")
+<<<<<<< HEAD
     parser.add_argument("--model", default="yolo11n.pt", help="Tệp model .pt cục bộ (mặc định yolo11n.pt)")
     parser.add_argument("--imgsz", type=int, default=320, help="Kích thước inference, bội số dương của 32")
     parser.add_argument("--conf", type=probability, default=0.35, help="Ngưỡng confidence")
@@ -48,6 +49,12 @@ def build_parser():
                         help="Giữ câu đọc và thông báo thêm số giây này khi camera rung mất dấu tạm thời; 0 tắt")
     parser.add_argument("--repeat-interval", type=float, default=2.5,
                         help="Khoảng chờ trước khi đọc lặp lại cùng một câu hướng dẫn, giây")
+=======
+    parser.add_argument("--model", default="yolov8n.pt", help="Tệp model .pt cục bộ")
+    parser.add_argument("--imgsz", type=int, default=320, help="Kích thước inference, bội số dương của 32")
+    parser.add_argument("--conf", type=probability, default=0.45, help="Ngưỡng confidence")
+    parser.add_argument("--iou", type=probability, default=0.45, help="Ngưỡng IoU cho NMS trong Ultralytics")
+>>>>>>> origin/main
     parser.add_argument("--device", default="cpu", help="Thiết bị Ultralytics; mặc định cpu")
     parser.add_argument("--backend", choices=("auto", "dshow", "msmf"), default="auto", help="Backend camera OpenCV")
     parser.add_argument("--width", type=int, default=640, help="Chiều rộng camera yêu cầu; driver có thể chọn khác")
@@ -59,10 +66,13 @@ def build_parser():
     parser.add_argument("--font", help="Phông .ttf/.ttc hỗ trợ tiếng Việt")
     parser.add_argument("--speech-backend", choices=("auto", "winrt", "sapi", "onecore"), default="auto")
     parser.add_argument("--voice-id", help="ID giọng vi/vi-VN từ --list-voices")
+<<<<<<< HEAD
     parser.add_argument("--tts", choices=("windows", "vieneu"), default="windows",
                         help="Nguồn giọng: windows cục bộ, hoặc vieneu (VieNeu Cloud API, cần biến môi trường VIENEU_API_KEY)")
     parser.add_argument("--vieneu-voice", default="Nhật Phong", help="Tên giọng VieNeu khi dùng --tts vieneu")
     parser.add_argument("--vieneu-speed", type=positive_float, default=1.0, help="Tốc độ đọc VieNeu (0.5–3.0 cho chất lượng tốt nhất)")
+=======
+>>>>>>> origin/main
     parser.add_argument("--metrics", type=Path, help="Ghi số đo JSONL; tự thêm số vào tên nếu tệp đã tồn tại")
     return parser
 
@@ -225,6 +235,7 @@ def run(args):
         camera = CameraWorker(args.source, backend=args.backend, width=args.width,
                               height=args.height, rotation=args.rotation, mirror=args.mirror,
                               stale_after=args.max_age, freeze_after=args.freeze_after)
+<<<<<<< HEAD
         if args.tts == "vieneu":
             from .vieneu_speech import VieNeuSpeechEngine
             engine = VieNeuSpeechEngine(voice=args.vieneu_voice, speed=args.vieneu_speed)
@@ -234,6 +245,10 @@ def run(args):
                                    repeat_interval=getattr(args, "repeat_interval", 2.5),
                                    hold_seconds=getattr(args, "hold_seconds", 0.8),
                                    finish_utterance=True)
+=======
+        feedback = FeedbackManager(WindowsSpeechEngine(backend=args.speech_backend, voice_id=args.voice_id),
+                                   enabled=not (args.mute or args.no_detect))
+>>>>>>> origin/main
         camera.start()
         if not args.no_detect:
             pipeline = PipelineWorker(camera, lambda: YoloDetector(args.model, args.imgsz, args.conf,
@@ -241,13 +256,17 @@ def run(args):
             pipeline.start()
         last_key = None
         last_audio_error = None
+<<<<<<< HEAD
         last_narration: Narration | None = None
+=======
+>>>>>>> origin/main
         while True:
             camera_state = camera.snapshot()
             pipeline_state = pipeline.snapshot() if pipeline else None
             now = time.monotonic()
             view = select_view(camera_state, pipeline_state, no_detect=args.no_detect,
                                now=now, max_age=args.max_age, confidence=args.conf)
+<<<<<<< HEAD
             hold_seconds = getattr(args, "hold_seconds", 0.8)
             if view.narration is not None:
                 last_narration = view.narration
@@ -256,6 +275,8 @@ def run(args):
                   0 <= now - last_narration.source_captured_at < min(args.max_age, hold_seconds)):
                 view = View(view.frame, view.detections, view.narration,
                             last_narration.text, view.valid_detection, view.inference_ms)
+=======
+>>>>>>> origin/main
             feedback.set_context(camera_state.session_id, view.valid_detection)
             key = (view.frame.session_id, view.frame.frame_id) if view.frame and view.valid_detection else None
             if key != last_key:
@@ -312,10 +333,13 @@ def main(argv=None):
         parser.error("--width và --height phải lớn hơn 0.")
     if not math.isfinite(args.freeze_after) or args.freeze_after < 0:
         parser.error("--freeze-after phải hữu hạn và không âm.")
+<<<<<<< HEAD
     if not math.isfinite(args.hold_seconds) or args.hold_seconds < 0:
         parser.error("--hold-seconds phải hữu hạn và không âm.")
     if not math.isfinite(args.repeat_interval) or args.repeat_interval < 0:
         parser.error("--repeat-interval phải hữu hạn và không âm.")
+=======
+>>>>>>> origin/main
     if isinstance(args.source, str) and args.source.startswith("-"):
         parser.error("Nguồn camera không hợp lệ.")
     return run(args)

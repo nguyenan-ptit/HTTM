@@ -32,9 +32,15 @@ class NarrationTests(unittest.TestCase):
 
     def test_describes_left_center_and_right_in_original_frame_coordinates(self):
         cases = [
+<<<<<<< HEAD
             ((0, 0, 100, 100), "Có vật cản ở bên trái, đi sang phải.", "obstacle:left"),
             ((350, 0, 550, 100), "Có vật cản phía trước, đi sang trái hoặc phải.", "obstacle:center"),
             ((800, 0, 900, 100), "Có vật cản ở bên phải, đi sang trái.", "obstacle:right"),
+=======
+            ((0, 0, 100, 100), "Có người ở bên trái.", "person:left"),
+            ((350, 0, 550, 100), "Có người ở giữa ảnh.", "person:center"),
+            ((800, 0, 900, 100), "Có người ở bên phải.", "person:right"),
+>>>>>>> origin/main
         ]
         for bbox, text, group in cases:
             with self.subTest(bbox=bbox):
@@ -48,6 +54,7 @@ class NarrationTests(unittest.TestCase):
             detect(bbox=(250, 0, 350, 100)),
             detect(bbox=(550, 0, 650, 100)),
         ])
+<<<<<<< HEAD
         description = self.narrate(result)
         self.assertEqual(description.groups, ("obstacle:center", "obstacle:right"))
         self.assertEqual(description.text, "Có vật cản phía trước và bên phải, đi sang trái.")
@@ -61,12 +68,20 @@ class NarrationTests(unittest.TestCase):
             detect(bbox=(800, 0, 900, 100)),
         ])
         self.assertEqual(self.narrate(all_blocked).text, "Có vật cản chắn lối, dừng lại.")
+=======
+        self.assertEqual(self.narrate(result).groups, ("person:center", "person:right"))
+>>>>>>> origin/main
 
     def test_groups_duplicates_without_claiming_object_count(self):
         result = make_result([detect(), detect(bbox=(110, 0, 210, 100))])
         description = self.narrate(result)
+<<<<<<< HEAD
         self.assertEqual(description.text, "Có vật cản ở bên trái, đi sang phải.")
         self.assertEqual(description.groups, ("obstacle:left",))
+=======
+        self.assertEqual(description.text, "Có người ở bên trái.")
+        self.assertEqual(description.groups, ("person:left",))
+>>>>>>> origin/main
 
     def test_empty_or_low_confidence_produces_no_safe_path_claim(self):
         self.assertIsNone(self.narrate(make_result()))
@@ -80,7 +95,11 @@ class NarrationTests(unittest.TestCase):
 
     def test_uses_labels_instead_of_assuming_custom_class_ids_are_coco(self):
         description = self.narrate(make_result([detect(label="car", class_id=0)]))
+<<<<<<< HEAD
         self.assertEqual(description.text, "Có vật cản ở bên trái, đi sang phải.")
+=======
+        self.assertEqual(description.text, "Có ô tô ở bên trái.")
+>>>>>>> origin/main
 
     def test_rejects_other_session_stale_future_and_failed_frames(self):
         for result in [
@@ -108,6 +127,7 @@ class NarrationTests(unittest.TestCase):
             detect(bbox=(0, 0, 100, 301)), detect(bbox=(0, math.nan, 100, 100)),
         ]
         self.assertIsNone(self.narrate(make_result(invalid)))
+<<<<<<< HEAD
         self.assertEqual(self.narrate(make_result([*invalid, detect()])).groups, ("obstacle:left",))
 
     def test_prioritizes_obstacles_and_merges_obstacle_classes_at_same_position(self):
@@ -126,6 +146,24 @@ class NarrationTests(unittest.TestCase):
         description = self.narrate(result, max_chars=len(expected))
         self.assertEqual(description.text, expected)
         self.assertEqual(description.groups, ("obstacle:left",))
+=======
+        self.assertEqual(self.narrate(make_result([*invalid, detect()])).groups, ("person:left",))
+
+    def test_prioritizes_people_vehicles_and_signs_with_group_limit(self):
+        result = make_result([
+            detect("chair", score=0.99), detect("stop sign", score=0.8),
+            detect("car", score=0.8), detect("person", score=0.6),
+        ])
+        description = self.narrate(result, max_groups=3)
+        self.assertEqual(description.groups, ("person:left", "car:left", "stop sign:left"))
+        self.assertNotIn("ghế", description.text)
+
+    def test_length_limit_keeps_complete_sentences_and_matching_groups(self):
+        result = make_result([detect(), detect("car")])
+        description = self.narrate(result, max_chars=len("Có người ở bên trái."))
+        self.assertEqual(description.text, "Có người ở bên trái.")
+        self.assertEqual(description.groups, ("person:left",))
+>>>>>>> origin/main
         self.assertIsNone(self.narrate(result, max_chars=1))
 
     def test_dedup_key_does_not_depend_on_detector_order_or_confidence_order(self):

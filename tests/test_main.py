@@ -26,7 +26,11 @@ class ViewTests(unittest.TestCase):
     def test_boxes_use_exact_processed_frame(self):
         view = self.select()
         self.assertIs(view.frame, self.frame)
+<<<<<<< HEAD
         self.assertIn("Có vật cản", view.text)
+=======
+        self.assertIn("Có người", view.text)
+>>>>>>> origin/main
         self.assertTrue(view.valid_detection)
 
     def test_stale_result_falls_back_raw_without_boxes(self):
@@ -114,7 +118,11 @@ class MainLoopTests(unittest.TestCase):
             self.assertEqual(run(args), 0)
         self.assertIn("TTS lỗi kiểm thử", display.renders[-1][1]["audio_status"])
         self.assertIs(display.renders[-1][0][0], frame)
+<<<<<<< HEAD
         self.assertIn("Có vật cản", display.renders[-1][1]["narration_text"])
+=======
+        self.assertIn("Có người", display.renders[-1][1]["narration_text"])
+>>>>>>> origin/main
         self.assertTrue(all(worker.closed for worker in (camera, pipeline, engine, display)))
 
 

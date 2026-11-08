@@ -7,9 +7,12 @@ stop() có thể hủy cả tổng hợp và phát âm thanh mà không có call
 from __future__ import annotations
 
 import argparse
+<<<<<<< HEAD
 import base64
 import ctypes
 import io
+=======
+>>>>>>> origin/main
 import json
 import os
 from pathlib import Path
@@ -18,13 +21,19 @@ import subprocess
 import sys
 import tempfile
 import time
+<<<<<<< HEAD
 import wave
+=======
+>>>>>>> origin/main
 from typing import Any, BinaryIO
 
 BACKENDS = ("auto", "winrt", "sapi", "onecore")
 SAMPLE_TEXT = "Có người ở bên trái. Có ô tô ở giữa ảnh. Có biển báo dừng ở bên phải."
 MAX_TEXT_LENGTH = 400
+<<<<<<< HEAD
 _SND_ASYNC, _SND_MEMORY, _SND_NODEFAULT, _SND_PURGE = 0x1, 0x4, 0x2, 0x40
+=======
+>>>>>>> origin/main
 
 
 class SpeechError(RuntimeError):
@@ -117,6 +126,7 @@ class WindowsSpeechEngine:
         self._stdout: BinaryIO | None = None
         self._stderr: BinaryIO | None = None
         self._started_at = 0.0
+<<<<<<< HEAD
         self._current_text = ""
         self._cache: dict[str, tuple[bytes, dict[str, Any]]] = {}
         self._cached_until = 0.0
@@ -144,15 +154,22 @@ class WindowsSpeechEngine:
             self._cache.pop(text, None)
             self._buffer = None
             return False
+=======
+>>>>>>> origin/main
 
     def start(self, text: str) -> None:
         if not text.strip() or len(text) > MAX_TEXT_LENGTH:
             raise SpeechError(f"Câu đọc phải có 1–{MAX_TEXT_LENGTH} ký tự.")
+<<<<<<< HEAD
         if self._process is not None or self._cached_until > 0:
             raise SpeechError("Engine đang đọc; FeedbackManager cần dừng hoặc đợi câu hiện tại.")
         if self._play_cached(text):
             return
         self._current_text = text
+=======
+        if self._process is not None:
+            raise SpeechError("Engine đang đọc; FeedbackManager cần dừng hoặc đợi câu hiện tại.")
+>>>>>>> origin/main
         payload = {"action": "speak", "backend": self.backend, "voiceId": self.voice_id,
                    "text": text, "timeoutMs": min(20000, int(self.timeout * 1000))}
         try:
@@ -164,25 +181,34 @@ class WindowsSpeechEngine:
             self._process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=self._stdout,
                                              stderr=self._stderr,
                                              creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+<<<<<<< HEAD
             if self._process.stdin is None:
                 raise SpeechError("Không mở được stdin của worker giọng.")
+=======
+            assert self._process.stdin is not None
+>>>>>>> origin/main
             self._process.stdin.write(json.dumps(payload, ensure_ascii=False).encode("utf-8"))
             self._process.stdin.close()
             self._started_at = time.monotonic()
             self.last_result = None
             self.status = "Đang chuẩn bị/đọc bằng giọng tiếng Việt"
         except (OSError, SpeechError) as exc:
+<<<<<<< HEAD
             try:
                 self.stop()
             except SpeechError as stop_exc:
                 # Giữ lỗi gốc; lỗi dừng worker được nối làm ngữ cảnh.
                 raise SpeechError(f"{exc}; {stop_exc}") from exc
+=======
+            self.stop()
+>>>>>>> origin/main
             self.status = f"Lỗi âm thanh: {exc}"
             if isinstance(exc, SpeechError):
                 raise
             raise SpeechError(self.status) from exc
 
     def poll(self) -> str | None:
+<<<<<<< HEAD
         if self._cached_until > 0:
             if time.monotonic() < self._cached_until:
                 return None
@@ -193,6 +219,8 @@ class WindowsSpeechEngine:
             selected = (self.last_result or {}).get("selectedVoice") or {}
             self.status = f"Đã phát xong: {selected.get('name', 'giọng tiếng Việt')} (chưa xác nhận nghe)"
             return "done"
+=======
+>>>>>>> origin/main
         process = self._process
         if process is None:
             return None
@@ -203,9 +231,13 @@ class WindowsSpeechEngine:
                 self.status = "Lỗi âm thanh: hết thời gian tổng hợp/phát"
                 raise SpeechError(self.status)
             return None
+<<<<<<< HEAD
         if self._stdout is None or self._stderr is None:
             self._process = None
             raise SpeechError("Tệp đầu ra của worker giọng đã bị đóng.")
+=======
+        assert self._stdout is not None and self._stderr is not None
+>>>>>>> origin/main
         self._stdout.seek(0)
         self._stderr.seek(0)
         stdout, stderr = self._stdout.read(), self._stderr.read()
@@ -216,6 +248,7 @@ class WindowsSpeechEngine:
         except SpeechError as exc:
             self.status = f"Lỗi âm thanh: {exc}"
             raise
+<<<<<<< HEAD
         wav_b64 = self.last_result.pop("wavBase64", None)
         if isinstance(wav_b64, str) and wav_b64 and self._current_text:
             try:
@@ -226,6 +259,8 @@ class WindowsSpeechEngine:
                     self._cache[self._current_text] = (wav_bytes, dict(self.last_result))
             except Exception:
                 pass
+=======
+>>>>>>> origin/main
         selected = self.last_result.get("selectedVoice") or {}
         self.status = f"Đã phát xong: {selected.get('name', 'giọng tiếng Việt')} (chưa xác nhận nghe)"
         return "done"
@@ -258,11 +293,14 @@ class WindowsSpeechEngine:
                 # forgetting a worker whose termination is not confirmed.
                 raise SpeechError(self.status) from exc
         self._process = None
+<<<<<<< HEAD
         self._cached_until = 0.0
         self._cached_result = None
         if self._buffer is not None and os.name == "nt":
             ctypes.windll.winmm.PlaySoundW(None, None, _SND_PURGE)
             self._buffer = None
+=======
+>>>>>>> origin/main
         self._close_files()
         self.status = "Âm thanh đã dừng"
 
