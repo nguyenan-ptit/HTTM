@@ -92,7 +92,11 @@ class IntegrationTests(unittest.TestCase):
                     feedback.submit(view.narration)
                 time.sleep(.005)
             self.assertTrue(engine.started.is_set(), "Chưa ghép được câu từ pipeline sang feedback")
+<<<<<<< HEAD
+            self.assertEqual(engine.text, "Có vật cản ở bên trái, đi sang phải.")
+=======
             self.assertEqual(engine.text, "Có người ở bên trái.")
+>>>>>>> origin/main
             alive.clear()
             deadline = time.monotonic() + 2
             while time.monotonic() < deadline and not engine.stopped.is_set():

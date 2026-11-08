@@ -99,6 +99,13 @@ _VEHICLES = frozenset(
     {"bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat"}
 )
 _SIGNS = frozenset({"traffic light", "stop sign"})
+<<<<<<< HEAD
+# Tất cả 80 lớp COCO đều được gộp chung thành "vật cản" để đề xuất lối đi thống nhất.
+OBSTACLE_LABELS = frozenset(COCO_LABELS_VI)
+OBSTACLE_KEY = "obstacle"
+OBSTACLE_TEXT_VI = "vật cản"
+=======
+>>>>>>> origin/main
 _POSITION_TEXT = {
     "left": "ở bên trái",
     "center": "ở giữa ảnh",
@@ -116,8 +123,27 @@ def label_vi(label: str) -> str:
     return COCO_LABELS_VI.get(_canonical_label(label), UNKNOWN_LABEL_VI)
 
 
+<<<<<<< HEAD
+def _group_label(label: str) -> str:
+    """Gộp mọi lớp vật cản thành một nhóm; lớp khác giữ nguyên nhãn."""
+    return OBSTACLE_KEY if label in OBSTACLE_LABELS else label
+
+
+def _spoken(group_label: str) -> str:
+    return OBSTACLE_TEXT_VI if group_label == OBSTACLE_KEY else label_vi(group_label)
+
+
+def display_label_vi(label: str) -> str:
+    """Nhãn hiển thị trên khung hình video: quy mọi vật cản đã biết về 'vật cản'."""
+    return _spoken(_group_label(_canonical_label(label)))
+
+
+def _priority(label: str) -> int:
+    if label == OBSTACLE_KEY:
+=======
 def _priority(label: str) -> int:
     if label == "person":
+>>>>>>> origin/main
         return 0
     if label in _VEHICLES:
         return 1
@@ -126,6 +152,25 @@ def _priority(label: str) -> int:
     return 3
 
 
+<<<<<<< HEAD
+_OBSTACLE_NAVIGATION_VI: dict[frozenset[str], str] = {
+    frozenset({"left"}): "Có vật cản ở bên trái, đi sang phải.",
+    frozenset({"right"}): "Có vật cản ở bên phải, đi sang trái.",
+    frozenset({"center"}): "Có vật cản phía trước, đi sang trái hoặc phải.",
+    frozenset({"left", "center"}): "Có vật cản bên trái và phía trước, đi sang phải.",
+    frozenset({"center", "right"}): "Có vật cản phía trước và bên phải, đi sang trái.",
+    frozenset({"left", "right"}): "Có vật cản hai bên, đi thẳng.",
+    frozenset({"left", "center", "right"}): "Có vật cản chắn lối, dừng lại.",
+}
+
+
+def suggest_navigation(obstacle_positions: set[str] | frozenset[str]) -> str | None:
+    """Đề xuất hướng đi dựa trên tập vị trí ('left', 'center', 'right') có vật cản."""
+    return _OBSTACLE_NAVIGATION_VI.get(frozenset(obstacle_positions))
+
+
+=======
+>>>>>>> origin/main
 def narrate(
     result: DetectionResult,
     *,
@@ -177,7 +222,11 @@ def narrate(
         position = "left" if center_x < width / 3 else (
             "right" if center_x >= 2 * width / 3 else "center"
         )
+<<<<<<< HEAD
+        key = (_group_label(_canonical_label(detection.label)), position)
+=======
         key = (_canonical_label(detection.label), position)
+>>>>>>> origin/main
         grouped[key] = max(grouped.get(key, 0), detection.score)
 
     # Stable label/position ordering prevents detector iteration order from
@@ -186,17 +235,41 @@ def narrate(
         grouped,
         key=lambda key: (_priority(key[0]), -grouped[key], key[0], _POSITION_ORDER[key[1]]),
     )
+<<<<<<< HEAD
+    obstacle_keys = [
+        (OBSTACLE_KEY, pos)
+        for pos in ("left", "center", "right")
+        if (OBSTACLE_KEY, pos) in grouped
+    ][:max_groups]
+    selected: list[tuple[str, str]] = []
+    sentences: list[str] = []
+    if obstacle_keys:
+        nav_sentence = suggest_navigation({pos for _, pos in obstacle_keys})
+        if nav_sentence and len(nav_sentence) <= max_chars:
+            selected.extend(obstacle_keys)
+            sentences.append(nav_sentence)
+    for key in ranked:
+        if key[0] == OBSTACLE_KEY:
+            continue
+        if len(selected) >= max_groups:
+            break
+        sentence = f"Có {_spoken(key[0])} {_POSITION_TEXT[key[1]]}."
+=======
     selected: list[tuple[str, str]] = []
     sentences: list[str] = []
     for key in ranked:
         sentence = f"Có {label_vi(key[0])} {_POSITION_TEXT[key[1]]}."
+>>>>>>> origin/main
         candidate = " ".join([*sentences, sentence])
         if len(candidate) > max_chars:
             continue
         selected.append(key)
         sentences.append(sentence)
+<<<<<<< HEAD
+=======
         if len(selected) == max_groups:
             break
+>>>>>>> origin/main
     if not selected:
         return None
 

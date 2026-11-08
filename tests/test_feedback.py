@@ -272,6 +272,57 @@ class FeedbackTests(unittest.TestCase):
         self.assertEqual(self.manager.snapshot().last_event, "cancelled:no_detection")
         self.assertEqual(self.manager.snapshot().utterances_cancelled, 2)
 
+<<<<<<< HEAD
+    def test_hold_seconds_keeps_active_speech_across_brief_blur_or_shake(self):
+        manager = FeedbackManager(self.engine, hold_seconds=0.8, clock=lambda: self.now, autostart=False)
+        self.addCleanup(manager.close)
+        manager.set_context("s", True)
+        manager.submit(self.item(1, "obstacle:left"))
+        manager._step()
+        self.assertTrue(self.engine.busy)
+        # Camera shakes after 0.3s: empty frame and shifted position within hold window do not cancel.
+        self.now = 10.3
+        manager.submit(None)
+        manager._step()
+        self.assertTrue(self.engine.busy)
+        self.now = 10.5
+        manager.submit(self.item(2, "obstacle:center"))
+        manager._step()
+        self.assertEqual(self.engine.texts, ["Có obstacle:left."])
+        # Once past 0.8s without matching evidence, empty frame cancels.
+        self.now = 10.9
+        manager.submit(None)
+        manager._step()
+        self.assertFalse(self.engine.busy)
+
+    def test_finish_utterance_completes_speech_even_when_camera_shakes_or_ttl_expires(self):
+        manager = FeedbackManager(self.engine, finish_utterance=True, clock=lambda: self.now, autostart=False)
+        self.addCleanup(manager.close)
+        manager.set_context("s", True)
+        manager.submit(self.item(1, "obstacle:center"))
+        manager._step()
+        self.assertTrue(self.engine.busy)
+        # Camera shakes: empty frame, different scene, and even past 2.0s TTL do not cut off the sentence.
+        self.now = 10.5
+        manager.submit(None)
+        manager._step()
+        self.assertTrue(self.engine.busy)
+        self.now = 11.0
+        manager.submit(self.item(2, "obstacle:left"))
+        manager._step()
+        self.assertTrue(self.engine.busy)
+        self.now = 13.0
+        manager.set_context("s", False)
+        manager._step()
+        self.assertTrue(self.engine.busy)
+        # Once the engine finishes speaking, completion is recorded cleanly.
+        self.engine.busy = False
+        manager._step()
+        self.assertEqual(manager.snapshot().utterances_completed, 1)
+        self.assertEqual(manager.snapshot().utterances_cancelled, 0)
+
+=======
+>>>>>>> origin/main
 
 class DelayedPlaybackTests(unittest.TestCase):
     def test_continuous_fresh_evidence_allows_two_point_five_second_startup(self):

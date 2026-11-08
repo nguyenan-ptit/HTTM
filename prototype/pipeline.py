@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass
+<<<<<<< HEAD
+import logging
+=======
+>>>>>>> origin/main
 import math
 import threading
 import time
@@ -11,6 +15,12 @@ from typing import Any, Callable
 
 from .types import DetectionResult
 
+<<<<<<< HEAD
+log = logging.getLogger(__name__)
+MAX_CONSECUTIVE_FAILURES = 3
+
+=======
+>>>>>>> origin/main
 
 @dataclass(frozen=True)
 class PipelineSnapshot:
@@ -38,6 +48,10 @@ class PipelineWorker:
         self._result: DetectionResult | None = None
         self._status = "Model chưa khởi động."
         self._samples: deque[float] = deque(maxlen=240)
+<<<<<<< HEAD
+        self.last_error: str | None = None
+=======
+>>>>>>> origin/main
 
     def start(self) -> None:
         if self._thread is not None:
@@ -46,6 +60,14 @@ class PipelineWorker:
         self._thread = threading.Thread(target=self._run, name="yolo-worker", daemon=True)
         self._thread.start()
 
+<<<<<<< HEAD
+    def _log_error(self, exc: BaseException) -> None:
+        # Chi tiết lỗi chỉ ghi log/last_error, không đưa vào trạng thái hiển thị.
+        self.last_error = repr(exc)
+        log.warning("Pipeline lỗi: %s", self.last_error)
+
+=======
+>>>>>>> origin/main
     def _publish(self, result: DetectionResult | None, status: str) -> None:
         with self._lock:
             self._result, self._status = result, status
@@ -55,6 +77,22 @@ class PipelineWorker:
     def _run(self) -> None:
         try:
             detector = self.detector_factory()
+<<<<<<< HEAD
+        except FileNotFoundError as exc:
+            self._log_error(exc)
+            self._publish(None, "Chưa có model .pt cục bộ; xem hướng dẫn chuẩn bị model.")
+            return
+        except ImportError as exc:
+            self._log_error(exc)
+            self._publish(None, "Thiếu thư viện YOLO; hãy cài dependency theo README.")
+            return
+        except Exception as exc:
+            self._log_error(exc)
+            self._publish(None, "Không nạp được model; kiểm tra tệp và cấu hình.")
+            return
+        last_key = None
+        failures = 0
+=======
         except FileNotFoundError:
             self._publish(None, "Chưa có model .pt cục bộ; xem hướng dẫn chuẩn bị model.")
             return
@@ -65,6 +103,7 @@ class PipelineWorker:
             self._publish(None, "Không nạp được model; kiểm tra tệp và cấu hình.")
             return
         last_key = None
+>>>>>>> origin/main
         while not self._stop.is_set():
             camera_state = self.camera.snapshot()
             frame = camera_state.frame
@@ -85,6 +124,21 @@ class PipelineWorker:
             try:
                 result = detector.predict(frame)
                 if result.error:
+<<<<<<< HEAD
+                    raise RuntimeError(str(result.error))
+                if (result.frame.session_id, result.frame.frame_id) != key:
+                    raise RuntimeError("Kết quả model không khớp ảnh nguồn.")
+            except Exception as exc:
+                self._log_error(exc)
+                failures += 1
+                if failures >= MAX_CONSECUTIVE_FAILURES:
+                    self._publish(None, "Lỗi model nhiều lần liên tiếp; đã dừng nhận diện.")
+                    return
+                # Giữ luồng sống: khung hình mới kế tiếp sẽ được thử lại.
+                self._publish(None, "Lỗi model khi nhận diện; đã tạm dừng mô tả.")
+                continue
+            failures = 0
+=======
                     self._publish(None, "Model báo lỗi khi nhận diện; đã tạm dừng mô tả.")
                     return
                 if (result.frame.session_id, result.frame.frame_id) != key:
@@ -93,6 +147,7 @@ class PipelineWorker:
             except Exception:
                 self._publish(None, "Lỗi model khi nhận diện; đã tạm dừng mô tả.")
                 return
+>>>>>>> origin/main
             if self._stop.is_set():
                 break
             camera_after = self.camera.snapshot()

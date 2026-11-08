@@ -145,7 +145,12 @@ function Invoke-Synthesis([string]$Backend, $Voice, [string]$Text, [bool]$Play, 
                 $player.Stream = $memory
                 $player.PlaySync()
             }
+<<<<<<< HEAD
+            $wavBase64 = [Convert]::ToBase64String($memory.ToArray())
+            return @{ synthesisSucceeded = $true; audioBytes = $bytes; wavBase64 = $wavBase64; playbackAttempted = $Play; playbackCompleted = $(if ($Play) { $true } else { $null }) }
+=======
             return @{ synthesisSucceeded = $true; audioBytes = $bytes; playbackAttempted = $Play; playbackCompleted = $(if ($Play) { $true } else { $null }) }
+>>>>>>> origin/main
         } finally {
             if ($null -ne $player) { $player.Stop(); $player.Dispose() }
             if ($null -ne $memory) { $memory.Dispose() }
@@ -240,7 +245,11 @@ try {
             $report.audioBytes = $audio.audioBytes
             $report.selectedVoice = $voice
             if ($request.action -eq 'speak') {
+<<<<<<< HEAD
+                $success = @{ ok = $true; action = 'speak'; backend = $backend; selectedVoice = $voice; synthesisSucceeded = $true; audioBytes = $audio.audioBytes; wavBase64 = $audio.wavBase64; playbackAttempted = $true; playbackCompleted = $audio.playbackCompleted; heardConfirmed = $null; errors = $errors }
+=======
                 $success = @{ ok = $true; action = 'speak'; backend = $backend; selectedVoice = $voice; synthesisSucceeded = $true; audioBytes = $audio.audioBytes; playbackAttempted = $true; playbackCompleted = $audio.playbackCompleted; heardConfirmed = $null; errors = $errors }
+>>>>>>> origin/main
                 break
             }
         } catch {

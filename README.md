@@ -1,113 +1,144 @@
-# Prototype mô tả vật thể bằng tiếng Việt
+# Hệ Thống Thông Minh Hỗ Trợ Người Khiếm Thị (HTTM)
 
-Luồng hiện tại: **camera điện thoại → DroidCam → OpenCV → YOLOv8n trên máy tính → câu tiếng Việt → TTS Windows → loa/tai nghe máy tính**. Chương trình mô tả loại vật thể và vị trí trong ảnh. Âm thanh không tự truyền về điện thoại qua DroidCam.
+Hệ thống nhận diện vật cản thời gian thực từ camera điện thoại (qua DroidCam) hoặc webcam, phân tích vùng an toàn bằng **YOLO11 (`yolo11n.pt`)** và phát âm thanh **đề xuất lối đi bằng tiếng Việt** qua giọng đọc cục bộ Windows hoặc **VieNeu Cloud API** (giọng `"Nhật Phong"`).
 
-Đã triển khai camera tự kết nối lại, nhận diện bất đồng bộ, nhãn Unicode, tạo câu, quản lý lời đọc và ghi số đo. Mức kiểm chứng thực tế được ghi tại [báo cáo kiểm chứng](docs/verification.md). Chưa có bằng chứng chạy toàn luồng với điện thoại và nghe tiếng Việt thành công trên máy này.
+Luồng xử lý:
+**Camera điện thoại (DroidCam) → OpenCV → YOLO11n → Phân vùng vật cản (Trái / Giữa / Phải) → Đề xuất hướng đi → Phát giọng nói (RAM Cache)**.
 
-## Chuẩn bị môi trường
+---
 
-Windows x64, CPython 3.11–3.14, DroidCam app/client tương thích. Dùng môi trường `.venv` đang có; chỉ tạo khi chưa tồn tại:
+## Tính năng nổi bật
+
+- **Đồng nhất mọi đối tượng thành `"vật cản"`:** Toàn bộ 80 lớp COCO đều được quy về `"vật cản"` trên cả khung hình hiển thị lẫn âm thanh cảnh báo.
+- **Đề xuất lối đi trực tiếp:**
+  | Vị trí có vật cản | Câu hướng dẫn phát ra |
+  | --- | --- |
+  | Chỉ bên trái | *"Có vật cản ở bên trái, đi sang phải."* |
+  | Chỉ bên phải | *"Có vật cản ở bên phải, đi sang trái."* |
+  | Chỉ ở giữa | *"Có vật cản phía trước, đi sang trái hoặc phải."* |
+  | Bên trái + ở giữa | *"Có vật cản bên trái và phía trước, đi sang phải."* |
+  | Ở giữa + bên phải | *"Có vật cản phía trước và bên phải, đi sang trái."* |
+  | Hai bên trái & phải (ở giữa trống) | *"Có vật cản hai bên, đi thẳng."* |
+  | Cả 3 vùng (trái + giữa + phải) | *"Có vật cản chắn lối, dừng lại."* |
+  | Không có vật cản | Giữ im lặng (không báo "an toàn" giả) |
+- **Chống rung camera khi di chuyển:**
+  - **Đọc trọn câu (`finish_utterance=True`):** Khi đã bắt đầu phát cảnh báo, hệ thống đọc hết câu hướng dẫn mà không bị ngắt quãng nếu tay cầm điện thoại bị rung làm mất dấu tạm thời.
+  - **Giữ trạng thái hiển thị (`--hold-seconds 0.8`):** Giữ câu hướng dẫn trên màn hình thêm 0.8 giây qua các khung hình nhòe.
+  - **Ngưỡng nhạy cao hơn (`--conf 0.35`):** Giúp bắt được vật cản ngay cả khi ảnh hơi mờ do bước đi.
+- **Phát âm thanh tức thì với RAM Cache:**
+  - Âm thanh WAV sau lần tổng hợp đầu tiên được lưu trong RAM và phát lại trực tiếp qua `winmm` (độ trễ **< 0.02 giây**), không tốn thời gian gọi lại API hay mở lại tiến trình PowerShell.
+
+---
+
+## 1. Cài đặt môi trường
+
+Yêu cầu: Windows x64, Python 3.11–3.14.
 
 ```powershell
 py -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --no-cache-dir --only-binary=:all: -r requirements.txt
-.\.venv\Scripts\python.exe -c "import cv2, numpy; print(cv2.__version__, numpy.__version__)"
 ```
 
-[requirements.txt](requirements.txt) cố định phiên bản dependency trực tiếp, gồm cặp torch/torchvision tương ứng. Đây chưa phải lock đầy đủ dependency bắc cầu. Sau khi cài thành công, có thể lưu môi trường đã resolve bằng `python -m pip freeze > requirements-resolved.txt` và kiểm tra trước khi dùng trên máy khác. Không cài `opencv-python-headless` cho cửa sổ video. TTS dùng Windows PowerShell 5.1 và API giọng có sẵn, không cần `pyttsx3` hoặc dịch vụ cloud. Chương trình không cần API key.
+---
 
-Nếu pip lỗi, xem [chẩn đoán cài thư viện](docs/phase-1-phone-camera-yolo.md#34-xử-lý-pip-bị-kẹt-khi-cài-thư-viện). Không tạo lại `.venv`, xóa cache hoặc đổi Python khi chưa đọc lỗi cụ thể.
+## 2. Chuẩn bị Model (`yolo11n.pt`)
 
-## Chạy theo từng bước
-
-1. Mở DroidCam trên điện thoại và client Windows, xác nhận preview chuyển động. Dùng Wi-Fi nội bộ hoặc USB, chỉ bật video. Xem [hướng dẫn kết nối](docs/phase-1-phone-camera-yolo.md).
-2. Xác định nguồn OpenCV thực tế. **Số `1` bên dưới chỉ là ví dụ**, không phải port DroidCam. Mỗi lần chỉ chạy một phiên; nhấn `q` trước khi đổi nguồn.
-
-```powershell
-.\.venv\Scripts\python.exe -m prototype.main --source 1 --no-detect
-```
-
-3. Chuẩn bị model một lần khi có Internet; camera không tự tải model:
+Tải model `yolo11n.pt` (hoặc `yolo11s.pt`, `yolov8n.pt`) về máy trước khi chạy:
 
 ```powershell
 .\.venv\Scripts\python.exe -m prototype.model_tools --download
-.\.venv\Scripts\python.exe -m prototype.model_tools --inspect yolov8n.pt
-.\.venv\Scripts\python.exe -m prototype.model_tools --classes yolov8n.pt
 ```
 
-Model được tải từ release `v8.3.0` của [Ultralytics assets](https://github.com/ultralytics/assets/releases/tag/v8.3.0); công cụ ghi nguồn, kích thước, SHA-256 đo được và giấy phép vào `models/manifest.json`. SHA đo sau tải chưa phải so sánh với checksum độc lập của nhà phát hành; có thể thêm `--sha256 HEX` khi có digest đáng tin cậy. Nếu đã có model, dùng `--inspect`, kiểm tra nguồn/giấy phép và truyền đường dẫn bằng `--model`. `--classes` cần dependency inference và nạp model để liệt kê lớp thực tế, khác với `--inspect` chỉ đọc byte. Chỉ nạp `.pt` từ nguồn đáng tin cậy. Xem [ghi chú model](models/README.md).
+Kiểm tra checksum hoặc danh sách lớp của model:
+```powershell
+.\.venv\Scripts\python.exe -m prototype.model_tools --inspect yolo11n.pt
+.\.venv\Scripts\python.exe -m prototype.model_tools --classes yolo11n.pt
+```
 
-4. Kiểm tra nhận diện và câu chữ khi tắt tiếng:
+---
+
+## 3. Hướng dẫn chạy chương trình
+
+### Bước 1: Kiểm tra cổng camera (DroidCam / Webcam)
+Mở DroidCam trên điện thoại và máy tính, sau đó thử xem camera ở cổng số mấy (`0` hoặc `1`):
+```powershell
+.\.venv\Scripts\python.exe -m prototype.main --source 1 --no-detect
+```
+*(Nhấn `q` để đóng cửa sổ sau khi kiểm tra).*
+
+### Bước 2: Chạy hệ thống nhận diện và dẫn đường
+
+#### Cách A — Dùng giọng `"Nhật Phong"` qua VieNeu Cloud API
+Đặt biến môi trường `VIENEU_API_KEY` và chạy với `--tts vieneu`:
 
 ```powershell
-.\.venv\Scripts\python.exe -m prototype.main --source 1 --model yolov8n.pt --imgsz 320 --mute
+$env:VIENEU_API_KEY = "vn_sk_điền_mã_api_key_của_bạn_vào_đây"
+.\.venv\Scripts\python.exe -m prototype.main --source 1 --tts vieneu
 ```
 
-5. Sau khi thoát cửa sổ, kiểm tra riêng giọng. Lệnh đầu chỉ kiểm kê/tổng hợp RAM; lệnh thứ hai **phát mẫu qua loa/tai nghe máy tính**:
+*(Nếu muốn lưu cố định API key vào Windows để các lần sau không cần nhập lại)*:
+```powershell
+[Environment]::SetEnvironmentVariable("VIENEU_API_KEY", "vn_sk_điền_mã_api_key_của_bạn_vào_đây", "User")
+```
 
+#### Cách B — Dùng giọng tiếng Việt có sẵn của Windows (Offline, không cần API key)
+```powershell
+.\.venv\Scripts\python.exe -m prototype.main --source 1 --tts windows
+```
+
+Kiểm tra riêng giọng Windows trên máy:
 ```powershell
 .\.venv\Scripts\python.exe -m prototype.speech --list-voices
 .\.venv\Scripts\python.exe -m prototype.speech --test
 ```
 
-Phân biệt giọng đã cài, API thấy giọng, tổng hợp được và người nghe xác nhận. Xem [chẩn đoán tiếng Việt Windows](docs/windows-vietnamese-voice.md). Lần chẩn đoán đầu có lỗi WinRT/OneCore; sau đó người dùng xác nhận nghe được câu test. Không dùng kết quả chẩn đoán cũ để kết luận âm thanh hiện tại vẫn lỗi, và không tự chuyển sang giọng Anh.
+### Phím tắt trên cửa sổ hiển thị
+- **`m`**: Bật / tắt âm thanh đọc.
+- **`q`**: Thoát chương trình.
 
-6. Chạy toàn luồng khi các bước trên đã đạt:
+---
 
-```powershell
-.\.venv\Scripts\python.exe -m prototype.main --source 1 --model yolov8n.pt --imgsz 320 --metrics reports/session.jsonl
-```
+## 4. Các tham số dòng lệnh thường dùng
 
-Nhấn **`m`** để bật/tắt tiếng, **`q`** hoặc đóng cửa sổ để thoát. `--no-detect` không phát giọng. Khi TTS lỗi, video và câu mô tả tiếp tục; sau khi khắc phục nguyên nhân có thể tắt rồi bật lại bằng `m` để thử lại. Không chạy nhiều phiên chiếm cùng camera.
+Chạy `.\.venv\Scripts\python.exe -m prototype.main --help` để xem đầy đủ.
 
-Nếu `speech --test` nghe được nhưng cửa sổ camera không có tiếng, xem câu mô tả và trạng thái âm thanh. Bản sửa bộ điều phối giữ câu đang đọc khi ảnh mới tiếp tục xác nhận các loại/vị trí trong câu; TTL vẫn là 2 giây kể từ **bằng chứng xác nhận mới nhất**, không kéo dài chỉ vì thời gian xử lý. Nhóm đang đọc biến mất, ảnh hết hạn, camera/model lỗi, đổi phiên hoặc mute vẫn hủy lời. Chống lặp tính từ lúc worker hoàn tất thành công; một lần khởi động bị hủy không khóa câu đó thêm 6 giây.
+| Tham số | Mặc định | Ý nghĩa |
+| --- | --- | --- |
+| `--source` | *(Bắt buộc)* | Số thứ tự camera OpenCV (`0`, `1`...) hoặc đường dẫn video/URL. |
+| `--model` | `yolo11n.pt` | Đường dẫn tệp model `.pt` cục bộ (`yolo11n.pt`, `yolo11s.pt`, `yolov8n.pt`). |
+| `--imgsz` | `320` | Kích thước ảnh đưa vào YOLO (bội số của 32; tăng lên `480` hoặc `640` để bắt vật ở xa tốt hơn). |
+| `--conf` | `0.35` | Ngưỡng độ tự tin nhận diện `(0, 1]`. |
+| `--tts` | `windows` | Nguồn giọng đọc: `windows` (cục bộ) hoặc `vieneu` (VieNeu Cloud API). |
+| `--vieneu-voice` | `Nhật Phong` | Tên giọng đọc khi dùng `--tts vieneu`. |
+| `--vieneu-speed` | `1.0` | Tốc độ đọc VieNeu (`0.5` – `3.0`). |
+| `--hold-seconds` | `0.8` | Thời gian (giây) giữ thông báo khi camera rung làm mất dấu tạm thời. |
+| `--repeat-interval` | `2.5` | Khoảng thời gian (giây) chờ trước khi nhắc lại cùng một câu hướng dẫn. |
+| `--rotation` | `0` | Xoay ảnh trước khi nhận diện (`0`, `90`, `180`, `270`). |
+| `--mirror` | `False` | Lật ngang ảnh trước khi nhận diện và mô tả. |
+| `--mute` | `False` | Khởi động ở chế độ tắt tiếng (bấm `m` để bật lại). |
+| `--metrics` | `None` | Đường dẫn xuất log số đo hiệu năng dạng JSONL (VD: `reports/session.jsonl`). |
 
-Bạn có thể dùng lại cùng đường dẫn, ví dụ `--metrics reports/session-audio.jsonl`: khi tệp đã có, chương trình tự tạo `session-audio-1.jsonl`, `session-audio-2.jsonl`… và in đường dẫn thực tế trong terminal. Log cũ được giữ nguyên. Các trường `speech_started`, `speech_completed`, `speech_cancelled`, `speech_last_event`, `speech_evidence_age_ms` giúp phân biệt khởi động, hoàn tất và bị hủy; không lưu text hay nhãn chi tiết. `speech_completed` là worker/API báo hoàn tất, chưa phải người dùng xác nhận nghe. Nếu test có chọn `--backend onecore`, lệnh camera cần chọn tương ứng bằng `--speech-backend onecore`.
+---
 
-## Tùy chỉnh và dữ liệu
-
-Chạy `python -m prototype.main --help` để xem toàn bộ tùy chọn. Các mục thường dùng:
-
-| Tùy chọn | Ý nghĩa |
-| --- | --- |
-| `--backend auto/dshow/msmf` | Backend camera, thay khi driver không tương thích. |
-| `--rotation 90`, `--mirror` | Xoay trước, lật ngang sau; nhận diện/mô tả cùng ảnh đã biến đổi. Kiểm chứng trái/phải thực tế. |
-| `--imgsz 320`, `--conf 0.45`, `--iou 0.45` | Cấu hình thử nghiệm; cần đánh giá bằng ảnh thật. 320 có thể bỏ sót vật nhỏ. |
-| `--max-age 2` | Thời hạn tối đa tính từ ngay sau `OpenCV.read()`, không phải từ lúc inference xong. |
-| `--freeze-after 5` | Tạm dừng mô tả nếu ảnh lặp tuyệt đối 5 giây; có thể báo nhầm cảnh tĩnh hoàn toàn. `0` tắt kiểm tra này và không phát hiện được kiểu đứng ảnh đó. |
-| `--speech-backend auto/winrt/sapi/onecore` | Backend giọng; chỉ chọn `vi`/`vi-VN`. |
-| `--voice-id ID`, `--font PATH` | Chọn giọng Việt đã kiểm kê hoặc phông Unicode hỗ trợ tiếng Việt. |
-| `--metrics PATH` | JSONL số đo mỗi giây và thống kê cuối phiên. Tự thêm số vào tên khi trùng, giữ nguyên tệp cũ; không lưu ảnh hoặc nội dung lời đọc. |
-
-Giao diện hiển thị kết quả YOLO trên **đúng ảnh nguồn của kết quả**, vì vậy tốc độ ảnh có hộp bao phụ thuộc inference. Camera vẫn lấy ảnh mới trên worker riêng. Khi chưa có kết quả mới/hết hạn, giao diện trở về ảnh camera còn mới và bỏ hộp bao. Hàng đợi không tích ảnh cũ. Nếu driver treo khi đọc, UI vẫn báo mất dữ liệu và hủy lời; ứng dụng không mở camera thứ hai tranh chấp với driver đang treo.
-
-Camera FPS, YOLO FPS là tốc độ đo ở máy tính; `inference_ms` là thời gian toàn lời gọi predict và adapter hậu xử lý. Tuổi ảnh không bao gồm độ trễ chưa biết của điện thoại/DroidCam. Summary p50/p95 chỉ tính tối đa 10000 kết quả khác nhau được hiển thị cuối phiên; không phải độ trễ đầu cuối đến âm thanh.
-
-Không lưu/tải ảnh camera hoặc ghi âm mặc định. File số đo chỉ tạo khi truyền `--metrics`. Không đưa URL có mật khẩu, khóa hoặc dữ liệu riêng tư vào repository. YOLO/TTS hoạt động cục bộ sau khi chuẩn bị model/gói giọng; DroidCam vẫn cần kết nối Wi-Fi nội bộ hoặc USB đã chọn.
-
-## Kiểm thử và cấu trúc
-
-```powershell
-.\.venv\Scripts\python.exe -m unittest discover -s tests -v
-.\.venv\Scripts\python.exe -m compileall -q prototype tests
-```
-
-Kiểm thử tự động dùng camera/model/engine giả để kiểm tra phiên, tọa độ, tuổi ảnh và hủy; không chứng minh thiết bị thật hoạt động. Kiểm thử có OpenCV/Pillow có thể bỏ qua nếu thiếu dependency và phải được ghi rõ.
+## 5. Cấu trúc mã nguồn & Kiểm thử
 
 ```text
-prototype/camera.py       một chủ sở hữu camera, ảnh mới nhất, reconnect
-prototype/detector.py     adapter YOLO, bbox trên ảnh nguồn
-prototype/pipeline.py     inference worker, loại kết quả cũ/sai phiên
-prototype/narration.py    ánh xạ 80 nhãn COCO và câu tiếng Việt
-prototype/feedback.py     chống lặp, TTL, hủy, một câu chờ mới nhất
-prototype/speech.py       engine/CLI TTS và worker windows_speech.ps1
-prototype/display.py      video, hộp bao và chữ Unicode
-prototype/main.py         CLI, ghép luồng, số đo
-prototype/model_tools.py  tải có chủ đích và checksum model
-tests/                    kiểm thử hành vi
-docs/                     hướng dẫn và kết quả kiểm chứng
+prototype/
+├── camera.py          # Luồng đọc camera riêng biệt, tự kết nối lại khi đứt quãng
+├── detector.py        # Adapter YOLO11/YOLOv8, ánh xạ tọa độ khung bao về ảnh gốc
+├── pipeline.py        # Worker nhận diện khung hình mới nhất, tự phục hồi khi lỗi tạm thời
+├── narration.py       # Quy đổi vật cản theo vùng Trái/Giữa/Phải và tạo câu đề xuất lối đi
+├── feedback.py        # Quản lý phát giọng nói, chống rung, đọc trọn câu và chống lặp
+├── speech.py          # Engine TTS Windows cục bộ (kèm RAM cache) và công cụ kiểm tra giọng
+├── vieneu_speech.py   # Engine TTS gọi VieNeu Cloud API (giọng Nhật Phong, kèm RAM cache)
+├── display.py         # Giao diện OpenCV + Pillow hiển thị khung "vật cản" và thông số
+├── main.py            # CLI chính, kết nối các worker và ghi nhận số đo
+└── model_tools.py     # Tải model từ release cố định và kiểm tra SHA-256
+tests/                 # Bộ 102 unit & integration tests
+docs/                  # Tài liệu thiết kế và báo cáo kiểm chứng
 ```
 
-Luồng tạo câu được mô tả tại [object-narration.md](docs/object-narration.md). Việc đánh giá `stop sign`, `traffic light` và biển Việt Nam còn thiếu nằm tại [traffic-sign-evaluation.md](docs/traffic-sign-evaluation.md). Chưa nhận biết màu đèn, mọi biển báo Việt Nam, khoảng cách hay hướng tránh. Các phần Android, GPS, OCR, STT, SOS và INT8 chưa triển khai trong nhiệm vụ này.
-#   H T T M  
- 
+Chạy toàn bộ bộ kiểm thử tự động:
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+```

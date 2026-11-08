@@ -1,4 +1,18 @@
 {
+<<<<<<< HEAD
+  "model": "YOLO11n",
+  "task": "detect",
+  "dataset": "COCO (80 lớp)",
+  "source": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11n.pt",
+  "release": "v8.3.0",
+  "file": "yolo11n.pt",
+  "size_bytes": 5613764,
+  "sha256": "0ebbc80d4a7680d14987a577cd21342b65ecfd94632bd9a8da63ae6417644ee1",
+  "checksum_verification": "measured-after-download",
+  "license": "Ultralytics AGPL-3.0 hoặc Enterprise; xem điều kiện tại nguồn",
+  "license_url": "https://www.ultralytics.com/license",
+  "downloaded_at": "2026-11-08T21:56:18.999626+00:00"
+=======
   "model": "YOLOv8n",
   "task": "detect",
   "dataset": "COCO (80 lớp)",
@@ -11,4 +25,5 @@
   "license": "Ultralytics AGPL-3.0 hoặc Enterprise; xem điều kiện tại nguồn",
   "license_url": "https://www.ultralytics.com/license",
   "downloaded_at": "2026-10-22T07:34:17.386604+00:00"
+>>>>>>> origin/main
 }
